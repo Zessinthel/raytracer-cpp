@@ -1,6 +1,6 @@
 #pragma once
 #include <cmath>
-#include "vec3.hpp"
+#include "raytracer/engine/vec3.hpp"
 
 namespace raytracer::engine {
 
@@ -133,75 +133,75 @@ struct Mat3 {
         return result;
     }
 
-};
+    };
 
-/**
- * Commutative counterpart of Mat3::operator*(double), so that t * M and
- * M * t both compile.
- * @param t the scalar factor.
- * @param M the matrix to scale.
- * @return a new Mat3.
- */
-inline Mat3 operator*(double t, const Mat3& M) {
-    return M * t;
-}
+    /**
+     * Commutative counterpart of Mat3::operator*(double), so that t * M and
+     * M * t both compile.
+     * @param t the scalar factor.
+     * @param M the matrix to scale.
+     * @return a new Mat3.
+     */
+    inline Mat3 operator*(double t, const Mat3& M) {
+        return M * t;
+    }
 
-/**
- * 3x3 identity matrix.
- * @return a new Mat3 equal to I.
- */
-inline Mat3 identity3() {
-    return Mat3{{
-        {1.0, 0.0, 0.0},
-        {0.0, 1.0, 0.0},
-        {0.0, 0.0, 1.0}
-    }};
-}
+    /**
+     * 3x3 identity matrix.
+     * @return a new Mat3 equal to I.
+     */
+    inline Mat3 identity3() {
+        return Mat3{{
+            {1.0, 0.0, 0.0},
+            {0.0, 1.0, 0.0},
+            {0.0, 0.0, 1.0}
+        }};
+    }
 
-/**
- * Rotation matrix about the x-axis by angle theta (radians),
- * right-handed convention.
- * @param theta rotation angle in radians.
- * @return a new Mat3.
- */
-inline Mat3 rotation_x(double theta) {
-    double c = std::cos(theta), s = std::sin(theta);
-    return Mat3{{
-        {1.0, 0.0, 0.0},
-        {0.0,  c,  -s},
-        {0.0,  s,   c}
-    }};
-}
+    /**
+     * Rotation matrix about the x-axis by angle theta (radians),
+     * right-handed convention.
+     * @param theta rotation angle in radians.
+     * @return a new Mat3.
+     */
+    inline Mat3 rotation_x(double theta) {
+        double c = std::cos(theta), s = std::sin(theta);
+        return Mat3{{
+            {1.0, 0.0, 0.0},
+            {0.0,  c,  -s},
+            {0.0,  s,   c}
+        }};
+    }
 
-/**
- * Rotation matrix about the y-axis by angle theta (radians),
- * right-handed convention.
- * @param theta rotation angle in radians.
- * @return a new Mat3.
- */
-inline Mat3 rotation_y(double theta) {
-    double c = std::cos(theta), s = std::sin(theta);
-    return Mat3{{
-        { c,  0.0,  s},
-        {0.0, 1.0, 0.0},
-        {-s,  0.0,  c}
-    }};
-}
+    /**
+     * Rotation matrix about the y-axis by angle theta (radians),
+     * right-handed convention.
+     * @param theta rotation angle in radians.
+     * @return a new Mat3.
+     */
+    inline Mat3 rotation_y(double theta) {
+        double c = std::cos(theta), s = std::sin(theta);
+        return Mat3{{
+            { c,  0.0,  s},
+            {0.0, 1.0, 0.0},
+            {-s,  0.0,  c}
+        }};
+    }
 
-/**
- * Rotation matrix about the z-axis by angle theta (radians),
- * right-handed convention.
- * @param theta rotation angle in radians.
- * @return a new Mat3.
- */
-inline Mat3 rotation_z(double theta) {
-    double c = std::cos(theta), s = std::sin(theta);
-    return Mat3{{
-        { c,  -s, 0.0},
-        { s,   c, 0.0},
-        {0.0, 0.0, 1.0}
-    }};
-}
+    /**
+     * Rotation matrix about the z-axis by angle theta (radians),
+     * right-handed convention.
+     * @param theta rotation angle in radians.
+     * @return a new Mat3.
+     */
+    inline Mat3 rotation_z(double theta) {
+        double c = std::cos(theta), s = std::sin(theta);
+        return Mat3{{
+            { c,  -s, 0.0},
+            { s,   c, 0.0},
+            {0.0, 0.0, 1.0}
+        }};
+    }
 
 
 }  // namespace raytracer::engine
