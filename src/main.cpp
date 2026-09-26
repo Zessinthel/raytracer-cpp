@@ -2,6 +2,8 @@
 #include <cmath>
 #include "raytracer/engine/vec3.hpp"
 #include "raytracer/engine/mat3.hpp"
+#include "raytracer/engine/discretizer.hpp"
+#include "raytracer/engine/topology.hpp"
 
 int main(){
     using raytracer::engine::Vec3;
@@ -59,6 +61,24 @@ int main(){
     Mat3 Rt = R.transpose();
     // esperas Rinv.m[i][j] ≈ Rt.m[i][j] para todo i,j (ortogonalidad)
     std::cout << "R^-1[0][1] = " << Rinv.m[0][1] << ", R^T[0][1] = " << Rt.m[0][1] << "\n";
+
+    auto grid = raytracer::engine::discretize_cartesian(
+        2, 0.0, 1.0,
+        2, 0.0, 1.0,
+        1, 0.0, 0.0
+    );
+    std::cout << "grid.size() = " << grid.size() << "\n";  // esperas 4 (2*2*1)
+    std::cout << "grid[0] = (" << grid[0].x << ", " << grid[0].y << ", " << grid[0].z << ")\n";
+
+    // --- Topology: grid_triangles_open(3,3) debe dar 8 triangulos ---
+    using raytracer::engine::grid_triangles_open;
+
+    auto tris = grid_triangles_open(3, 3);
+    std::cout << "num_triangulos = " << tris.size() << "\n";  // esperas 8
+
+    for (const auto& t : tris) {
+        std::cout << "  {" << t[0] << ", " << t[1] << ", " << t[2] << "}\n";
+    }
 
     return 0;
 
