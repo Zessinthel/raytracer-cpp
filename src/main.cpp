@@ -50,6 +50,16 @@ int main(){
     std::cout << "rotation_z(90deg)*e_x = (" << Rx.x << ", "
                << Rx.y << ", " << Rx.z << ")\n";
 
+
+    Mat3 I = identity3();
+    std::cout << "det(I) = " << I.determinant() << "\n";  // esperas 1
+
+    Mat3 R = rotation_z(M_PI / 4.0);
+    Mat3 Rinv = R.inverse();
+    Mat3 Rt = R.transpose();
+    // esperas Rinv.m[i][j] ≈ Rt.m[i][j] para todo i,j (ortogonalidad)
+    std::cout << "R^-1[0][1] = " << Rinv.m[0][1] << ", R^T[0][1] = " << Rt.m[0][1] << "\n";
+
     return 0;
 
 }

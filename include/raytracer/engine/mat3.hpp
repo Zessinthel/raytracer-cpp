@@ -92,6 +92,47 @@ struct Mat3 {
             }
         return result;
     }
+
+    /**
+     * Determinant, via cofactor expansion along the first row:
+     * det(A) = A00(A11*A22 - A12*A21) - A01(A10*A22 - A12*A20)
+     *          + A02(A10*A21 - A11*A20).
+     * det(A) == 0 iff the rows of A are linearly dependent (A is singular,
+     * not invertible).
+     * @return a double.
+     */
+    double determinant() const {
+        return m[0][0] * (m[1][1]*m[2][2] - m[1][2]*m[2][1])
+            - m[0][1] * (m[1][0]*m[2][2] - m[1][2]*m[2][0])
+            + m[0][2] * (m[1][0]*m[2][1] - m[1][1]*m[2][0]);
+    }
+
+    /**
+     * Matrix inverse via the adjugate formula: A^-1 = adj(A) / det(A).
+     * Precondition: determinant() != 0 (singular matrices have no inverse;
+     * not checked here — see caller responsibility below).
+     * @return a new Mat3, the inverse of this.
+     */
+    Mat3 inverse() const {
+        double det = determinant();
+        double inv_det = 1.0 / det;
+
+        Mat3 result{};
+        result.m[0][0] =  (m[1][1]*m[2][2] - m[1][2]*m[2][1]) * inv_det;
+        result.m[0][1] = -(m[0][1]*m[2][2] - m[0][2]*m[2][1]) * inv_det;
+        result.m[0][2] =  (m[0][1]*m[1][2] - m[0][2]*m[1][1]) * inv_det;
+
+        result.m[1][0] = -(m[1][0]*m[2][2] - m[1][2]*m[2][0]) * inv_det;
+        result.m[1][1] =  (m[0][0]*m[2][2] - m[0][2]*m[2][0]) * inv_det;
+        result.m[1][2] = -(m[0][0]*m[1][2] - m[0][2]*m[1][0]) * inv_det;
+
+        result.m[2][0] =  (m[1][0]*m[2][1] - m[1][1]*m[2][0]) * inv_det;
+        result.m[2][1] = -(m[0][0]*m[2][1] - m[0][1]*m[2][0]) * inv_det;
+        result.m[2][2] =  (m[0][0]*m[1][1] - m[0][1]*m[1][0]) * inv_det;
+
+        return result;
+    }
+
 };
 
 /**
@@ -161,5 +202,6 @@ inline Mat3 rotation_z(double theta) {
         {0.0, 0.0, 1.0}
     }};
 }
+
 
 }  // namespace raytracer::engine
