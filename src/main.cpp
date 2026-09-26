@@ -4,6 +4,8 @@
 #include "raytracer/engine/mat3.hpp"
 #include "raytracer/engine/discretizer.hpp"
 #include "raytracer/engine/topology.hpp"
+#include "raytracer/engine/parametric_surfaces.hpp"
+
 
 int main(){
     using raytracer::engine::Vec3;
@@ -79,6 +81,13 @@ int main(){
     for (const auto& t : tris) {
         std::cout << "  {" << t[0] << ", " << t[1] << ", " << t[2] << "}\n";
     }
+
+    // --- ParametricSurfaces: chequeo de conteo para sphere(5,6,1.0) ---
+    using raytracer::engine::sphere;
+
+    auto s = sphere(5, 6, 1.0);
+    std::cout << "sphere vertices = " << s.vertices.size() << "\n";   // esperas 30
+    std::cout << "sphere triangles = " << s.triangles.size() << "\n"; // esperas 44
 
     return 0;
 
