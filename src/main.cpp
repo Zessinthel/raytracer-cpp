@@ -5,6 +5,7 @@
 #include "raytracer/engine/discretizer.hpp"
 #include "raytracer/engine/topology.hpp"
 #include "raytracer/engine/parametric_surfaces.hpp"
+#include "raytracer/physics/triangle.hpp"
 
 
 int main(){
@@ -16,7 +17,7 @@ int main(){
     using raytracer::engine::cross;
     using raytracer::engine::length;
     using raytracer::engine::normalized;
-
+    using raytracer::physics::intersect_triangle;
 
     Vec3 O{0.0, 0.0, -5.0};
     Vec3 C{0.0, 0.0, 0.0};
@@ -88,6 +89,36 @@ int main(){
     auto s = sphere(5, 6, 1.0);
     std::cout << "sphere vertices = " << s.vertices.size() << "\n";   // esperas 30
     std::cout << "sphere triangles = " << s.triangles.size() << "\n"; // esperas 44
+
+    // --- Triangle: interseccion Moller-Trumbore ---
+
+    Vec3 v0{-1.0, -1.0, 0.0};
+    Vec3 v1{ 1.0, -1.0, 0.0};
+    Vec3 v2{ 0.0,  1.0, 0.0};
+
+    // Caso 1: rayo directo al centroide del triangulo, debe impactar
+    Vec3 O1{0.0, 0.0, -1.0};
+    Vec3 D1{0.0, 0.0,  1.0};
+    auto hit1 = intersect_triangle(O1, D1, v0, v1, v2);
+    if (hit1) {
+        std::cout << "hit1: t=" << hit1->t << " u=" << hit1->u << " v=" << hit1->v << "\n";
+    } else {
+        std::cout << "hit1: sin interseccion (inesperado)\n";
+    }
+
+    // Caso 2: rayo paralelo al plano del triangulo (direccion en el
+    // propio plano z=0), debe fallar por det ~= 0
+    Vec3 O2{0.0, 0.0, 0.0};
+    Vec3 D2{1.0, 0.0, 0.0};
+    auto hit2 = intersect_triangle(O2, D2, v0, v1, v2);
+    std::cout << "hit2: " << (hit2 ? "interseccion (inesperado)" : "sin interseccion (correcto)") << "\n";
+
+    // Caso 3: rayo que pasa fuera del triangulo (a la derecha, x=5)
+    Vec3 O3{5.0, 0.0, -1.0};
+    Vec3 D3{0.0, 0.0,  1.0};
+    auto hit3 = intersect_triangle(O3, D3, v0, v1, v2);
+    std::cout << "hit3: " << (hit3 ? "interseccion (inesperado)" : "sin interseccion (correcto)") << "\n";
+
 
     return 0;
 
