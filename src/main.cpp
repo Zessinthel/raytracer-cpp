@@ -6,6 +6,7 @@
 #include "raytracer/engine/topology.hpp"
 #include "raytracer/engine/parametric_surfaces.hpp"
 #include "raytracer/physics/triangle.hpp"
+#include "raytracer/physics/mesh.hpp"
 
 
 int main(){
@@ -18,6 +19,9 @@ int main(){
     using raytracer::engine::length;
     using raytracer::engine::normalized;
     using raytracer::physics::intersect_triangle;
+    using raytracer::engine::sphere;
+    using raytracer::engine::Ray;
+    using raytracer::physics::Mesh;
 
     Vec3 O{0.0, 0.0, -5.0};
     Vec3 C{0.0, 0.0, 0.0};
@@ -119,6 +123,29 @@ int main(){
     auto hit3 = intersect_triangle(O3, D3, v0, v1, v2);
     std::cout << "hit3: " << (hit3 ? "interseccion (inesperado)" : "sin interseccion (correcto)") << "\n";
 
+    auto raw_sphere = sphere(5, 6, 1.0);
+    Mesh mesh = Mesh::from_triangle_mesh(raw_sphere);
+
+    std::cout << "mesh.vertex_count()   = " << mesh.vertex_count() << "\n";   // 30 (sin cambio)
+    std::cout << "mesh.triangle_count() = " << mesh.triangle_count() << "\n"; // 48 - 12 = 36
+
+    Ray ray{Vec3{0.0, 0.0, -5.0}, Vec3{0.0, 0.0, 1.0}};
+    auto hit = mesh.intersect(ray);
+    if (hit) {
+        std::cout << "hit: t=" << hit->t << " normal=(" << hit->normal.x
+                << ", " << hit->normal.y << ", " << hit->normal.z << ")\n";
+    } else {
+        std::cout << "hit: sin interseccion (inesperado)\n";
+    }
+
+    auto raw_sphere_fine = sphere(64, 64, 1.0);
+    Mesh mesh_fine = Mesh::from_triangle_mesh(raw_sphere_fine);
+    auto hit_fine = mesh_fine.intersect(ray);
+    if (hit_fine) std::cout << "hit_fine: t=" << hit_fine->t << "\n";
+
+    Ray ray_offset{Vec3{0.1, 0.0, -5.0}, Vec3{0.0, 0.0, 1.0}};
+    auto hit_offset = mesh_fine.intersect(ray_offset);
+    if (hit_offset) std::cout << "hit_offset: t=" << hit_offset->t << "\n";
 
     return 0;
 
