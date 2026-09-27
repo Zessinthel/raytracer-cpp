@@ -7,6 +7,7 @@
 #include "raytracer/engine/parametric_surfaces.hpp"
 #include "raytracer/physics/triangle.hpp"
 #include "raytracer/physics/mesh.hpp"
+#include "raytracer/scene/camera.hpp"
 
 
 int main(){
@@ -146,6 +147,27 @@ int main(){
     Ray ray_offset{Vec3{0.1, 0.0, -5.0}, Vec3{0.0, 0.0, 1.0}};
     auto hit_offset = mesh_fine.intersect(ray_offset);
     if (hit_offset) std::cout << "hit_offset: t=" << hit_offset->t << "\n";
+
+    // --- Camera: rayo central debe apuntar casi exactamente a (0,0,-1) ---
+    using raytracer::scene::Camera;
+
+    Camera cam(
+        Vec3{0.0, 0.0, 0.0},   // origin
+        Vec3{0.0, 0.0, -1.0},  // look_at
+        Vec3{0.0, 1.0, 0.0},   // up
+        90.0,                  // vfov_degrees
+        2, 2                   // nx, ny
+    );
+
+    // pixel central aproximado en una grilla 2x2: cualquiera de los 4
+    // esta cerca del centro; tomamos (0,0) y (1,1) para ver ambos extremos
+    auto r00 = cam.ray_for_pixel(0, 0);
+    auto r11 = cam.ray_for_pixel(1, 1);
+    std::cout << "ray(0,0).direction = (" << r00.direction.x << ", "
+            << r00.direction.y << ", " << r00.direction.z << ")\n";
+    std::cout << "ray(1,1).direction = (" << r11.direction.x << ", "
+            << r11.direction.y << ", " << r11.direction.z << ")\n";
+
 
     return 0;
 

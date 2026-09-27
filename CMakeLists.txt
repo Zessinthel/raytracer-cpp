@@ -11,5 +11,10 @@ add_library(physics INTERFACE)
 target_link_libraries(physics INTERFACE engine)
 target_include_directories(physics INTERFACE include)
 
+add_library(scene INTERFACE)
+target_link_libraries(scene INTERFACE engine)
+target_include_directories(scene INTERFACE include)
+
+
 add_executable(raytracer src/main.cpp)
-target_link_libraries(raytracer PRIVATE engine)
+target_link_libraries(raytracer PRIVATE scene physics engine)
