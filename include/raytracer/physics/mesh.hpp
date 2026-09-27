@@ -37,6 +37,23 @@ public:
      * Builds a Mesh from raw geometric data (e.g. the output of
      * engine::sphere, engine::cylinder, etc.), discarding any
      * triangle whose area falls below area_eps.
+     *
+     * KNOWN LIMITATION (pending fix): discarding degenerate
+     * triangles leaves a real hole in the surface wherever a ring
+     * of the source parametrization collapses to a point (e.g. the
+     * two poles of engine::sphere) — the vertices of that ring
+     * survive in the buffer (orphaned, referenced by zero
+     * triangles), but no triangle covers that region anymore. A ray
+     * traveling exactly along the parametrization's axis of
+     * symmetry passes clean through the hole regardless of grid
+     * resolution, since the hole is always centered on that axis.
+     * TODO: cap each pole with a fan of non-degenerate triangles,
+     * built from the first non-collapsed ring plus a single new
+     * apex vertex at the exact pole point — not from the collapsed
+     * ring itself. This must be implemented in engine::sphere (and
+     * any future parametrization with a collapsing ring), not here;
+     * from_triangle_mesh should keep filtering purely by area.
+     *
      * @param source vertex buffer + raw triangle list.
      * @param area_eps minimum accepted triangle area (parallelogram
      *        area = |cross(e1,e2)|, i.e. twice the triangle area;
