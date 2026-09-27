@@ -8,6 +8,7 @@
 #include "raytracer/physics/triangle.hpp"
 #include "raytracer/physics/mesh.hpp"
 #include "raytracer/scene/camera.hpp"
+#include "raytracer/scene/scene.hpp"
 
 
 int main(){
@@ -22,6 +23,8 @@ int main(){
     using raytracer::physics::intersect_triangle;
     using raytracer::engine::sphere;
     using raytracer::engine::Ray;
+    using raytracer::physics::Mesh;
+    using raytracer::scene::Scene;
     using raytracer::physics::Mesh;
 
     Vec3 O{0.0, 0.0, -5.0};
@@ -169,6 +172,23 @@ int main(){
             << r11.direction.y << ", " << r11.direction.z << ")\n";
 
 
+
+    Scene test_scene;
+    int idx_far  = test_scene.add(Mesh::from_triangle_mesh(sphere(20, 20, 1.0)));  // en el origen, radio 1
+    // la esfera "cercana" la desplazamos manualmente sumando el offset a sus vertices
+    auto near_sphere_raw = sphere(20, 20, 1.0);
+    for (auto& v : near_sphere_raw.vertices) v = v + Vec3{0.0, 0.0, -3.0};  // centrada en z=-3
+    int idx_near = test_scene.add(Mesh::from_triangle_mesh(near_sphere_raw));
+
+    Ray test_ray{Vec3{0.0, 0.0, -10.0}, Vec3{0.0, 0.1, 1.0}};  // offset para evitar el agujero polar
+    auto scene_hit = test_scene.intersect(test_ray);
+    if (scene_hit) {
+        std::cout << "scene_hit: object=" << scene_hit->object_index
+                << " t=" << scene_hit->t << "\n";  // esperas object=1 (la cercana), t menor
+    } else {
+        std::cout << "scene_hit: sin interseccion (inesperado)\n";
+    }
+    
     return 0;
 
 }
