@@ -10,6 +10,7 @@
 #include "raytracer/scene/camera.hpp"
 #include "raytracer/scene/scene.hpp"
 #include "raytracer/shading/shading.hpp"
+#include "raytracer/io/ppm_writer.hpp"
 
 
 int main(){
@@ -26,10 +27,11 @@ int main(){
     using raytracer::engine::Ray;
     using raytracer::physics::Mesh;
     using raytracer::scene::Scene;
-    using raytracer::physics::Mesh;
     using raytracer::shading::shade;
     using raytracer::shading::Color;
-    
+    using raytracer::scene::Camera;
+
+
     Vec3 O{0.0, 0.0, -5.0};
     Vec3 C{0.0, 0.0, 0.0};
 
@@ -200,6 +202,21 @@ int main(){
     Ray miss_ray{Vec3{0.0, 0.0, -10.0}, Vec3{5.0, 5.0, 1.0}};
     Color c_miss = shade(miss_ray, test_scene);
     std::cout << "shade(miss) = (" << c_miss.r << ", " << c_miss.g << ", " << c_miss.b << ")\n";
+
+
+    Scene render_scene;
+    render_scene.add(Mesh::from_triangle_mesh(sphere(20, 20, 1.0)));
+
+    Camera render_cam(
+        Vec3{0.0, 0.0, 3.0},   // origin: un poco alejado de la esfera
+        Vec3{0.0, 0.0, 0.0},   // look_at: mirando al centro de la esfera
+        Vec3{0.0, 1.0, 0.0},   // up
+        60.0,                   // vfov_degrees
+        540, 480                // resolucion
+    );
+
+    raytracer::io::write_ppm("render.ppm", render_cam, render_scene);
+    std::cout << "Imagen escrita en render.ppm\n";
 
     return 0;
 
