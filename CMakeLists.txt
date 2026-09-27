@@ -15,6 +15,9 @@ add_library(scene INTERFACE)
 target_link_libraries(scene INTERFACE engine)
 target_include_directories(scene INTERFACE include)
 
+add_library(shading INTERFACE)
+target_link_libraries(shading INTERFACE engine scene)
+target_include_directories(shading INTERFACE include)
 
 add_executable(raytracer src/main.cpp)
-target_link_libraries(raytracer PRIVATE scene physics engine)
+target_link_libraries(raytracer PRIVATE scene shading physics engine)

@@ -9,6 +9,7 @@
 #include "raytracer/physics/mesh.hpp"
 #include "raytracer/scene/camera.hpp"
 #include "raytracer/scene/scene.hpp"
+#include "raytracer/shading/shading.hpp"
 
 
 int main(){
@@ -26,7 +27,9 @@ int main(){
     using raytracer::physics::Mesh;
     using raytracer::scene::Scene;
     using raytracer::physics::Mesh;
-
+    using raytracer::shading::shade;
+    using raytracer::shading::Color;
+    
     Vec3 O{0.0, 0.0, -5.0};
     Vec3 C{0.0, 0.0, 0.0};
 
@@ -188,7 +191,16 @@ int main(){
     } else {
         std::cout << "scene_hit: sin interseccion (inesperado)\n";
     }
-    
+
+    // Rayo que SI golpea (reusa test_ray y test_scene de la prueba anterior)
+    Color c_hit = shade(test_ray, test_scene);
+    std::cout << "shade(hit) = (" << c_hit.r << ", " << c_hit.g << ", " << c_hit.b << ")\n";
+
+    // Rayo que definitivamente NO golpea nada (apunta lejos de ambas esferas)
+    Ray miss_ray{Vec3{0.0, 0.0, -10.0}, Vec3{5.0, 5.0, 1.0}};
+    Color c_miss = shade(miss_ray, test_scene);
+    std::cout << "shade(miss) = (" << c_miss.r << ", " << c_miss.g << ", " << c_miss.b << ")\n";
+
     return 0;
 
 }
