@@ -60,7 +60,7 @@ namespace raytracer::shading {
      * @return a Color.
      */
     inline Color shade(const raytracer::engine::Ray& ray, const raytracer::scene::Scene& world) {
-        auto hit = world.intersect(ray);
+        auto hit = world.intersect(ray, 0.0, raytracer::engine::T_INFINITE);
         if (hit)
             return normal_to_color(*hit);
         return background_color(ray);

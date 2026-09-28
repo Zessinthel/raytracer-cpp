@@ -38,26 +38,33 @@ namespace raytracer::scene {
         }
 
         /**
-         * Finds the closest valid intersection (smallest t >= 0) between
-         * the ray and any object in the scene.
-         * @param ray the ray to test.
-         * @return a SceneHit if some object is hit; std::nullopt otherwise.
+         * Finds the closest intersection with t in [t_min, t_max) between
+         * the ray and any object in the scene. The interval narrows as objects
+         * are visited: each object is asked only for hits closer than the best
+         * one found so far (the PRIMER-IMPACTO scheme of the course notes).
+         * @param ray the ray to test; with a unit direction, t is a distance.
+         * @param t_min lower end of the accepted interval (inclusive).
+         * @param t_max upper end of the accepted interval (exclusive); use
+         *              engine::T_INFINITE for no upper bound.
+         * @return a SceneHit if some object is hit within the interval;
+         *         std::nullopt otherwise.
          */
-        std::optional<SceneHit> intersect(const raytracer::engine::Ray& ray) const {
+        std::optional<SceneHit> intersect(const raytracer::engine::Ray& ray,
+                                          double t_min, double t_max) const {
             std::optional<SceneHit> closest;
+            double limit = t_max;
 
             for (std::size_t i = 0; i < objects_.size(); ++i) {
-                auto hit = objects_[i].intersect(ray);
+                auto hit = objects_[i].intersect(ray, t_min, limit);
                 if (!hit)
                     continue;
-                if (!closest || hit->t < closest->t) {
-                    closest = SceneHit{
-                        hit->t,
-                        ray.at(hit->t),
-                        hit->normal,
-                        static_cast<int>(i)
-                    };
-                }
+                closest = SceneHit{
+                    hit->t,
+                    ray.at(hit->t),
+                    hit->normal,
+                    static_cast<int>(i)
+                };
+                limit = hit->t;
             }
 
             return closest;

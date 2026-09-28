@@ -20,13 +20,25 @@ namespace raytracer::physics {
      * Moller-Trumbore ray-triangle intersection: closed-form algebraic
      * solution via barycentric coordinates and Cramer's rule
      * (det[a b c] = a . (b x c)), no iteration.
+     *
+     * Only hits with t in the half-open interval [t_min, t_max) count. The
+     * interval is what lets callers ask different questions with the same
+     * routine: t_min > 0 keeps a secondary ray from re-hitting the surface
+     * it starts on, and t_max lets a caller discard anything farther than the
+     * best hit found so far. When D is a unit vector, t is a distance and
+     * the interval is a range of lengths.
      * @param O ray origin.
-     * @param D ray direction (not required to be normalized).
+     * @param D ray direction (the algebra does not require it to be
+     *          normalized; the meaning of the interval does).
      * @param v0, v1, v2 triangle vertices.
+     * @param t_min lower end of the accepted interval (inclusive).
+     * @param t_max upper end of the accepted interval (exclusive); use
+     *              engine::T_INFINITE for no upper bound.
      * @param eps tolerance for the degenerate case (ray parallel to
      *            the triangle's plane, det ~= 0).
-     * @return a TriangleHit if the ray hits the triangle at t >= 0
-     *         with valid barycentric coordinates; std::nullopt otherwise.
+     * @return a TriangleHit if the ray hits the triangle at some t in
+     *         [t_min, t_max) with valid barycentric coordinates;
+     *         std::nullopt otherwise.
      */
     inline std::optional<TriangleHit> intersect_triangle(
         const raytracer::engine::Vec3& O,
@@ -34,6 +46,8 @@ namespace raytracer::physics {
         const raytracer::engine::Vec3& v0,
         const raytracer::engine::Vec3& v1,
         const raytracer::engine::Vec3& v2,
+        double t_min,
+        double t_max,
         double eps = 1e-9)
     {
         using namespace raytracer::engine;
@@ -58,7 +72,8 @@ namespace raytracer::physics {
             return std::nullopt;
 
         double t = dot(e2, qvec) * inv_det;
-        if (t < 0.0)
+        // Written as a negated conjunction so that a NaN t is rejected too.
+        if (!(t >= t_min && t < t_max))
             return std::nullopt;
 
         return TriangleHit{t, u, v};

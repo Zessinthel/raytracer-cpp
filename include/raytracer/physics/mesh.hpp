@@ -78,19 +78,28 @@ namespace raytracer::physics {
         }
 
         /**
-         * Finds the closest valid intersection (smallest t >= 0) between
-         * the ray and any triangle of this mesh, via brute-force
-         * iteration over every triangle (Moller-Trumbore per triangle).
+         * Finds the closest intersection with t in [t_min, t_max) between
+         * the ray and any triangle of this mesh, via brute-force iteration
+         * over every triangle (Moller-Trumbore per triangle). Each hit found
+         * narrows the upper end of the interval for the triangles still to
+         * be tested, so a triangle farther than the best hit so far is
+         * rejected without further work and no hit can lose to an earlier one.
          * The returned normal is the geometric normal given by the triangle
          * winding (outward for closed engine primitives); it is never
          * flipped toward the ray, so it still tells inside from outside.
-         * @param ray the ray to test.
-         * @return a MeshHit if some triangle is hit; std::nullopt otherwise.
+         * @param ray the ray to test; with a unit direction, t is a distance.
+         * @param t_min lower end of the accepted interval (inclusive).
+         * @param t_max upper end of the accepted interval (exclusive); use
+         *              engine::T_INFINITE for no upper bound.
+         * @return a MeshHit if some triangle is hit within the interval;
+         *         std::nullopt otherwise.
          */
-        std::optional<MeshHit> intersect(const raytracer::engine::Ray& ray) const {
+        std::optional<MeshHit> intersect(const raytracer::engine::Ray& ray,
+                                         double t_min, double t_max) const {
             using namespace raytracer::engine;
 
             std::optional<MeshHit> closest;
+            double limit = t_max;
 
             for (std::size_t i = 0; i < triangles_.size(); ++i) {
                 const auto& tri = triangles_[i];
@@ -98,14 +107,15 @@ namespace raytracer::physics {
                 const Vec3& v1 = vertices_[tri[1]];
                 const Vec3& v2 = vertices_[tri[2]];
 
-                auto hit = intersect_triangle(ray.origin, ray.direction, v0, v1, v2);
+                auto hit = intersect_triangle(ray.origin, ray.direction, v0, v1, v2, t_min, limit);
                 if (!hit)
                     continue;
 
-                if (!closest || hit->t < closest->t) {
-                    Vec3 face_normal = normalized(cross(v1 - v0, v2 - v0));
-                    closest = MeshHit{hit->t, face_normal, static_cast<int>(i)};
-                }
+                // The interval already excludes anything not closer than the
+                // best hit so far, so this one is the new closest.
+                Vec3 face_normal = normalized(cross(v1 - v0, v2 - v0));
+                closest = MeshHit{hit->t, face_normal, static_cast<int>(i)};
+                limit = hit->t;
             }
 
             return closest;
