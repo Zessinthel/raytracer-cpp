@@ -8,6 +8,7 @@
 #include "raytracer/engine/ray.hpp"
 #include "raytracer/scene/camera.hpp"
 #include "raytracer/scene/scene.hpp"
+#include "raytracer/shading/lighting.hpp"
 #include "raytracer/shading/shading.hpp"
 
 namespace raytracer::shading {
@@ -15,15 +16,17 @@ namespace raytracer::shading {
     /**
      * What the renderer draws for each pixel. Every mode answers the same
      * visibility question, which object is first along the ray and where; they
-     * differ in what they show of the answer. None of them uses light yet.
+     * differ in what they show of the answer.
      *
-     * The modes fall in two families. The picture-like ones (normals, albedo)
-     * draw the sky where nothing is hit. The data maps (distance, object_id)
-     * draw black there, so that a miss is not mistaken for a value.
+     * The modes fall in two families. The picture-like ones (normals, albedo,
+     * lambert) draw the sky where nothing is hit. The data maps (distance,
+     * object_id) draw black there, so that a miss is not mistaken for a value.
+     * Only lambert uses the scene's lights.
      */
     enum class ShadingMode {
         normals,     ///< surface normal as color, over a sky gradient
         albedo,      ///< the material's diffuse color, flat, over a sky gradient
+        lambert,     ///< albedo times the diffuse illumination (ambient + Lambert), over a sky gradient
         distance,    ///< distance t from the eye as gray, white near and black far
         object_id    ///< one flat color per object, over black
     };
@@ -89,6 +92,8 @@ namespace raytracer::shading {
             case ShadingMode::albedo:
                 return hit ? world.material_at(static_cast<std::size_t>(hit->object_index)).albedo
                            : background_color(ray);
+            case ShadingMode::lambert:
+                return hit ? diffuse_color(world, *hit) : background_color(ray);
             case ShadingMode::distance:
                 return hit ? distance_to_color(hit->t, settings.distance_far) : Color{0.0, 0.0, 0.0};
             case ShadingMode::object_id:

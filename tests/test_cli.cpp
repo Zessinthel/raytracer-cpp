@@ -59,6 +59,7 @@ static void test_flags() {
 
     CHECK(parse({"--mode", "object-id"}).settings.mode == ShadingMode::object_id);
     CHECK(parse({"--mode", "albedo"}).settings.mode == ShadingMode::albedo);
+    CHECK(parse({"--mode", "lambert"}).settings.mode == ShadingMode::lambert);
     CHECK(parse({"--mode", "normals"}).settings.mode == ShadingMode::normals);
     CHECK(parse({"--help"}).help);
     CHECK(parse({"--help", "--width", "10"}).help);
@@ -133,6 +134,7 @@ static void test_usage() {
         CHECK(text.find(flag) != std::string::npos);
     CHECK(text.find("object-id") != std::string::npos);
     CHECK(text.find("albedo") != std::string::npos);
+    CHECK(text.find("lambert") != std::string::npos);
     CHECK(text.find("both") != std::string::npos);     // the no-extension rule is documented
 }
 

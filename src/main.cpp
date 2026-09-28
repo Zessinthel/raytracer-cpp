@@ -18,6 +18,7 @@
 #include "raytracer/io/ppm_writer.hpp"
 #include "raytracer/physics/mesh.hpp"
 #include "raytracer/scene/camera.hpp"
+#include "raytracer/scene/light.hpp"
 #include "raytracer/scene/material.hpp"
 #include "raytracer/scene/scene.hpp"
 #include "raytracer/shading/render.hpp"
@@ -32,7 +33,9 @@ int main(int argc, char** argv) {
     using raytracer::engine::translated;
     using raytracer::physics::Mesh;
     using raytracer::scene::Camera;
+    using raytracer::scene::DirectionalLight;
     using raytracer::scene::Material;
+    using raytracer::scene::PointLight;
     using raytracer::scene::Scene;
 
     cli::Options options;
@@ -67,6 +70,13 @@ int main(int argc, char** argv) {
                     rotation_x(std::numbers::pi / 2.0),
                     Vec3{7.0, 0.0, 0.0}),
         Material{.albedo = {1.00, 0.82, 0.20}});
+
+    // Lights, with the intensities of the reference scene of the course notes
+    // (ambient 0.2, point 0.6, directional 0.2: they add up to 1). Both lights
+    // are on the camera's side and above the row, to the left and to the right.
+    gallery.set_ambient(0.2);
+    gallery.add_light(PointLight{Vec3{-4.0, -8.0, 7.0}, 0.6});
+    gallery.add_light(DirectionalLight{Vec3{1.0, -1.0, 2.0}, 0.2});
 
     Camera camera(Vec3{0.0, -12.0, 6.0},   // origin: in front of the row, raised
                   Vec3{0.0, 0.0, 0.0},     // look_at

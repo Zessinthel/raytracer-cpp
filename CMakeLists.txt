@@ -52,6 +52,10 @@ add_executable(test_scene_data tests/test_scene_data.cpp)
 target_link_libraries(test_scene_data PRIVATE scene physics engine)
 add_test(NAME scene_data COMMAND test_scene_data)
 
+add_executable(test_lighting tests/test_lighting.cpp)
+target_link_libraries(test_lighting PRIVATE shading scene physics engine)
+add_test(NAME lighting COMMAND test_lighting)
+
 add_executable(test_io tests/test_io.cpp)
 target_link_libraries(test_io PRIVATE io engine)
 add_test(NAME io COMMAND test_io)
