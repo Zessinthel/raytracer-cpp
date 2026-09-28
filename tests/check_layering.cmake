@@ -11,9 +11,7 @@ set(ALLOWED_engine  engine)
 set(ALLOWED_physics engine physics)
 set(ALLOWED_scene   engine physics scene)
 set(ALLOWED_shading engine physics scene shading)
-# TEMPORARY: io::write_ppm still runs the renderer, so it includes scene and
-# shading. Step 6 of the plan reduces this list to "engine io".
-set(ALLOWED_io      engine scene shading io)
+set(ALLOWED_io      engine io)
 
 set(violations 0)
 foreach(layer IN ITEMS engine physics scene shading io)

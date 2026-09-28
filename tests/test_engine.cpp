@@ -4,10 +4,13 @@
 // grid generation and mesh connectivity. Links against `engine` only.
 #include <array>
 #include <numbers>
+#include <stdexcept>
+#include <utility>
 
 #include "check.hpp"
 #include "raytracer/engine/coordinates.hpp"
 #include "raytracer/engine/discretizer.hpp"
+#include "raytracer/engine/image.hpp"
 #include "raytracer/engine/mat3.hpp"
 #include "raytracer/engine/topology.hpp"
 #include "raytracer/engine/vec3.hpp"
@@ -125,11 +128,37 @@ static void test_topology() {
     CHECK(triangulate_polygon({0, 1, 2, 3, 4}).size() == 3);
 }
 
+static void test_image() {
+    Image image(3, 2);
+    CHECK(image.width == 3 && image.height == 2);
+    CHECK(image.pixels.size() == 6);
+
+    // A new image is black.
+    for (const Color& c : image.pixels)
+        CHECK(c.r == 0.0 && c.g == 0.0 && c.b == 0.0);
+
+    // Row-major with row 0 at the top: pixel (x = 2, y = 1) is the last one.
+    image.at(2, 1) = Color{0.1, 0.2, 0.3};
+    image.at(0, 0) = Color{0.4, 0.5, 0.6};
+    CHECK_NEAR(image.pixels[5].g, 0.2, 0.0);
+    CHECK_NEAR(image.pixels[0].b, 0.6, 0.0);
+    const Image& view = image;
+    CHECK_NEAR(view.at(2, 1).r, 0.1, 0.0);
+
+    // Non-positive dimensions are rejected before anything is allocated.
+    int rejected = 0;
+    for (auto [w, h] : {std::pair{0, 4}, std::pair{4, 0}, std::pair{-1, 4}}) {
+        try { Image bad(w, h); } catch (const std::invalid_argument&) { ++rejected; }
+    }
+    CHECK(rejected == 3);
+}
+
 int main() {
     test_vec3();
     test_mat3();
     test_coordinates();
     test_discretizer();
     test_topology();
+    test_image();
     return check::report("engine");
 }

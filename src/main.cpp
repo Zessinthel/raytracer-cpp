@@ -1,32 +1,49 @@
 // src/main.cpp
 //
-// Orchestrator: builds the gallery scene and renders it to a PPM file.
-// All numerical checks live in tests/ and run with ctest.
+// Orchestrator: reads the options, builds the gallery scene, renders it and
+// writes the image. All numerical checks live in tests/ and run with ctest.
 #include <iostream>
 #include <numbers>
+#include <stdexcept>
 #include <string>
+#include <vector>
 
+#include "raytracer/engine/image.hpp"
 #include "raytracer/engine/mat3.hpp"
 #include "raytracer/engine/parametric_surfaces.hpp"
 #include "raytracer/engine/polyhedra.hpp"
 #include "raytracer/engine/transform.hpp"
 #include "raytracer/engine/vec3.hpp"
+#include "raytracer/io/png_writer.hpp"
 #include "raytracer/io/ppm_writer.hpp"
 #include "raytracer/physics/mesh.hpp"
 #include "raytracer/scene/camera.hpp"
 #include "raytracer/scene/scene.hpp"
+#include "raytracer/shading/render.hpp"
+#include "render_options.hpp"
 
 int main(int argc, char** argv) {
-    using raytracer::engine::Vec3;
+    using raytracer::engine::Image;
     using raytracer::engine::TriangleMesh;
+    using raytracer::engine::Vec3;
     using raytracer::engine::rotation_x;
-    using raytracer::engine::translated;
     using raytracer::engine::transformed;
+    using raytracer::engine::translated;
     using raytracer::physics::Mesh;
     using raytracer::scene::Camera;
     using raytracer::scene::Scene;
 
-    const std::string output_path = (argc > 1) ? argv[1] : "gallery.ppm";
+    cli::Options options;
+    try {
+        options = cli::parse_options(std::vector<std::string>(argv + 1, argv + argc));
+    } catch (const std::invalid_argument& error) {
+        std::cerr << "error: " << error.what() << "\n\n" << cli::usage();
+        return 2;
+    }
+    if (options.help) {
+        std::cout << cli::usage();
+        return 0;
+    }
 
     // World convention: right-handed, Z up. x runs to the right of the image,
     // y is depth (the camera looks toward +y) and z points up.
@@ -51,10 +68,21 @@ int main(int argc, char** argv) {
     Camera camera(Vec3{0.0, -12.0, 6.0},   // origin: in front of the row, raised
                   Vec3{0.0, 0.0, 0.0},     // look_at
                   Vec3{0.0, 0.0, 1.0},     // up
-                  40.0,                    // vertical field of view, degrees
-                  800, 300);               // resolution
+                  options.fov_degrees,
+                  options.width, options.height);
 
-    raytracer::io::write_ppm(output_path, camera, gallery);
-    std::cout << "Image written to " << output_path << "\n";
+    Image image = raytracer::shading::render(camera, gallery, options.settings);
+
+    try {
+        if (options.format == cli::OutputFormat::png)
+            raytracer::io::write_png(options.output, image);
+        else
+            raytracer::io::write_ppm(options.output, image);
+    } catch (const std::runtime_error& error) {
+        std::cerr << "error: " << error.what() << "\n";
+        return 1;
+    }
+
+    std::cout << "Image written to " << options.output << "\n";
     return 0;
 }

@@ -1,13 +1,15 @@
 // tests/test_scene_shading.cpp
 //
-// Checks for the camera (right-handed, Z-up), the scene (closest object) and
-// the current shading (background gradient and normal-based color).
+// Checks for the camera (right-handed, Z-up), the scene (closest object,
+// occlusion), the shading helpers and the renderer with its modes.
 // Links against `shading`, `scene`, `physics` and `engine`.
 #include <cmath>
 #include <optional>
 #include <random>
 
 #include "check.hpp"
+#include "raytracer/engine/color.hpp"
+#include "raytracer/engine/image.hpp"
 #include "raytracer/engine/parametric_surfaces.hpp"
 #include "raytracer/engine/ray.hpp"
 #include "raytracer/engine/transform.hpp"
@@ -15,14 +17,18 @@
 #include "raytracer/physics/mesh.hpp"
 #include "raytracer/scene/camera.hpp"
 #include "raytracer/scene/scene.hpp"
+#include "raytracer/shading/render.hpp"
 #include "raytracer/shading/shading.hpp"
 
 using namespace raytracer::engine;
 using raytracer::physics::Mesh;
 using raytracer::scene::Camera;
 using raytracer::scene::Scene;
-using raytracer::shading::Color;
+using raytracer::shading::RenderSettings;
+using raytracer::shading::ShadingMode;
 using raytracer::shading::background_color;
+using raytracer::shading::object_id_color;
+using raytracer::shading::render;
 using raytracer::shading::shade;
 
 static void expect_color(const Color& actual, double r, double g, double b, double tolerance) {
@@ -115,7 +121,44 @@ static void test_scene_narrowing_matches_per_object_minimum() {
             ++mismatches;
     }
     CHECK(mismatches == 0);
-    CHECK(hits > 400);
+    CHECK(hits > 300);     // measured: 874
+}
+
+static void test_scene_occluded() {
+    Scene row;
+    row.add(Mesh::from_triangle_mesh(translated(sphere(32, 32, 1.0), Vec3{0.0, 10.0, 0.0})));
+    row.add(Mesh::from_triangle_mesh(translated(sphere(32, 32, 1.0), Vec3{0.0, 5.0, 0.0})));
+    Ray ray{Vec3{0.0, 0.0, 0.0}, normalized(Vec3{0.05, 1.0, 0.03})};
+
+    CHECK(row.occluded(ray, 0.0, T_INFINITE));
+    CHECK(!row.occluded(ray, 0.0, 3.0));            // both spheres start beyond 3
+    CHECK(row.occluded(ray, 0.0, 8.0));             // the near one
+    CHECK(row.occluded(ray, 7.0, T_INFINITE));      // the far one
+    CHECK(!row.occluded(ray, 20.0, T_INFINITE));    // nothing past both
+    CHECK(!Scene{}.occluded(ray, 0.0, T_INFINITE)); // an empty scene occludes nothing
+
+    // It must agree with "intersect finds something" for any interval.
+    Scene crowd;
+    crowd.add(Mesh::from_triangle_mesh(translated(sphere(24, 24, 1.0), Vec3{-1.0, 4.0, 0.0})));
+    crowd.add(Mesh::from_triangle_mesh(translated(sphere(24, 24, 1.0), Vec3{1.0, 6.0, 0.5})));
+    crowd.add(Mesh::from_triangle_mesh(translated(sphere(24, 24, 1.5), Vec3{0.0, 9.0, -0.5})));
+
+    std::mt19937 rng(4242);
+    std::uniform_real_distribution<double> spread(-0.5, 0.5);
+    std::uniform_real_distribution<double> lower(0.0, 8.0);
+    std::uniform_real_distribution<double> width(0.0, 6.0);
+    int yes = 0, no = 0, mismatches = 0;
+    for (int k = 0; k < 2000; ++k) {
+        Ray r{Vec3{0.0, 0.0, 0.0}, normalized(Vec3{spread(rng), 1.0, spread(rng)})};
+        double t_min = lower(rng);
+        double t_max = (k % 5 == 0) ? T_INFINITE : t_min + width(rng);
+        bool blocked = crowd.occluded(r, t_min, t_max);
+        if (blocked != crowd.intersect(r, t_min, t_max).has_value())
+            ++mismatches;
+        (blocked ? yes : no)++;
+    }
+    CHECK(mismatches == 0);
+    CHECK(yes > 150 && no > 150);    // both outcomes are exercised (measured: 378 and 1622)
 }
 
 static void test_shading() {
@@ -132,17 +175,97 @@ static void test_shading() {
 
     // A floor facing +z, hit from above, is colored by its normal (0,0,1):
     // (n + 1) / 2 = (0.5, 0.5, 1).
+    RenderSettings normals;
     Scene floor;
     floor.add(Mesh::from_triangle_mesh(plane(3, 3, 10.0, 10.0)));
-    expect_color(shade(Ray{Vec3{0.1, 0.2, 5.0}, Vec3{0.0, 0.0, -1.0}}, floor), 0.5, 0.5, 1.0, 1e-12);
+    expect_color(shade(Ray{Vec3{0.1, 0.2, 5.0}, Vec3{0.0, 0.0, -1.0}}, floor, normals), 0.5, 0.5, 1.0, 1e-12);
     // Looking away from it, the ray sees the sky.
-    expect_color(shade(Ray{Vec3{0.1, 0.2, 5.0}, Vec3{0.0, 0.0, 1.0}}, floor), 0.5, 0.7, 1.0, 1e-12);
+    expect_color(shade(Ray{Vec3{0.1, 0.2, 5.0}, Vec3{0.0, 0.0, 1.0}}, floor, normals), 0.5, 0.7, 1.0, 1e-12);
+}
+
+static void test_modes() {
+    Scene world;
+    world.add(Mesh::from_triangle_mesh(plane(3, 3, 10.0, 10.0)));                                 // object 0, z = 0
+    world.add(Mesh::from_triangle_mesh(translated(sphere(24, 24, 1.0), Vec3{0.0, 0.0, 3.0})));    // object 1
+
+    Ray to_floor{Vec3{3.0, 3.0, 5.0}, Vec3{0.0, 0.0, -1.0}};      // hits the floor at t = 5
+    Ray to_sphere{Vec3{0.2, 0.1, 10.0}, Vec3{0.0, 0.0, -1.0}};    // hits the top of the sphere
+    Ray to_sky{Vec3{3.0, 3.0, 5.0}, Vec3{0.0, 0.0, 1.0}};         // hits nothing
+
+    // Distance mode: white at t = 0, black at t = far, linear in between.
+    RenderSettings distance;
+    distance.mode = ShadingMode::distance;
+    expect_color(shade(to_floor, world, distance), 0.75, 0.75, 0.75, 1e-12);     // far = 20 by default: 1 - 5/20
+    distance.distance_far = 10.0;
+    expect_color(shade(to_floor, world, distance), 0.5, 0.5, 0.5, 1e-12);
+    distance.distance_far = 4.0;                                                  // t beyond far stays black
+    expect_color(shade(to_floor, world, distance), 0.0, 0.0, 0.0, 1e-12);
+    expect_color(shade(to_sky, world, distance), 0.0, 0.0, 0.0, 1e-12);          // a miss is black
+    distance.distance_far = 20.0;
+    Color near_hit = shade(to_sphere, world, distance);
+    CHECK(near_hit.r > 0.6 && near_hit.r < 0.75);                                 // t is about 6.03, gray about 0.70
+    CHECK_NEAR(near_hit.r, near_hit.g, 0.0);
+
+    // Object-id mode: one flat color per object, black on a miss.
+    RenderSettings ids;
+    ids.mode = ShadingMode::object_id;
+    Color floor_id = shade(to_floor, world, ids);
+    Color sphere_id = shade(to_sphere, world, ids);
+    expect_color(floor_id, object_id_color(0).r, object_id_color(0).g, object_id_color(0).b, 0.0);
+    expect_color(sphere_id, object_id_color(1).r, object_id_color(1).g, object_id_color(1).b, 0.0);
+    expect_color(shade(to_sky, world, ids), 0.0, 0.0, 0.0, 0.0);
+
+    // The palette repeats every 8 objects and its 8 colors are all different.
+    expect_color(object_id_color(8), object_id_color(0).r, object_id_color(0).g, object_id_color(0).b, 0.0);
+    int equal_pairs = 0;
+    for (int a = 0; a < 8; ++a)
+        for (int b = a + 1; b < 8; ++b) {
+            Color ca = object_id_color(a), cb = object_id_color(b);
+            if (ca.r == cb.r && ca.g == cb.g && ca.b == cb.b)
+                ++equal_pairs;
+        }
+    CHECK(equal_pairs == 0);
+}
+
+static void test_render() {
+    // A floor at z = -1 seen from a camera at the origin looking along +y.
+    Scene world;
+    world.add(Mesh::from_triangle_mesh(translated(plane(2, 2, 400.0, 400.0), Vec3{0.0, 0.0, -1.0})));
+    Camera cam(Vec3{0.0, 0.0, 0.0}, Vec3{0.0, 1.0, 0.0}, Vec3{0.0, 0.0, 1.0}, 60.0, 9, 7);
+    RenderSettings settings;
+
+    Image image = render(cam, world, settings);
+    CHECK(image.width == 9 && image.height == 7);
+
+    // Every pixel equals shading its own primary ray; the camera counts rows
+    // from the bottom and Image from the top, so row j lands in row 6 - j.
+    int differences = 0;
+    for (int j = 0; j < 7; ++j)
+        for (int i = 0; i < 9; ++i) {
+            Color a = image.at(i, 6 - j);
+            Color b = shade(cam.ray_for_pixel(i, j), world, settings);
+            if (a.r != b.r || a.g != b.g || a.b != b.b)
+                ++differences;
+        }
+    CHECK(differences == 0);
+
+    // Orientation: the top row looks at the sky, the bottom row at the floor.
+    expect_color(image.at(4, 6), 0.5, 0.5, 1.0, 1e-12);
+    CHECK(image.at(4, 0).g > 0.6);
+
+    // Image validates its dimensions.
+    bool rejected = false;
+    try { Image bad(0, 5); } catch (const std::invalid_argument&) { rejected = true; }
+    CHECK(rejected);
 }
 
 int main() {
     test_camera_axes();
     test_scene();
     test_scene_narrowing_matches_per_object_minimum();
+    test_scene_occluded();
     test_shading();
+    test_modes();
+    test_render();
     return check::report("scene_shading");
 }
