@@ -19,14 +19,16 @@ namespace raytracer::shading {
      * differ in what they show of the answer.
      *
      * The modes fall in two families. The picture-like ones (normals, albedo,
-     * lambert) draw the sky where nothing is hit. The data maps (distance,
-     * object_id) draw black there, so that a miss is not mistaken for a value.
-     * Only lambert uses the scene's lights.
+     * lambert, phong) draw the sky where nothing is hit. The data maps
+     * (distance, object_id) draw black there, so that a miss is not mistaken
+     * for a value. lambert and phong use the scene's lights; phong adds the
+     * specular lobe on top of lambert for materials that have one.
      */
     enum class ShadingMode {
         normals,     ///< surface normal as color, over a sky gradient
         albedo,      ///< the material's diffuse color, flat, over a sky gradient
         lambert,     ///< albedo times the diffuse illumination (ambient + Lambert), over a sky gradient
+        phong,       ///< lambert plus the material's Phong specular highlight, over a sky gradient
         distance,    ///< distance t from the eye as gray, white near and black far
         object_id    ///< one flat color per object, over black
     };
@@ -94,6 +96,10 @@ namespace raytracer::shading {
                            : background_color(ray);
             case ShadingMode::lambert:
                 return hit ? diffuse_color(world, *hit) : background_color(ray);
+            case ShadingMode::phong:
+                // ray.direction is a unit vector (Camera's rays are), so -ray.direction
+                // is already the unit V of the notes; no renormalization needed.
+                return hit ? phong_color(world, *hit, ray.direction * -1.0) : background_color(ray);
             case ShadingMode::distance:
                 return hit ? distance_to_color(hit->t, settings.distance_far) : Color{0.0, 0.0, 0.0};
             case ShadingMode::object_id:

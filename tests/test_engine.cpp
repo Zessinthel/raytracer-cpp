@@ -38,6 +38,29 @@ static void test_vec3() {
     CHECK_VEC(cross(a, b), cross(b, a) * -1.0, 1e-15);       // anticommutative
     CHECK_NEAR(dot(cross(a, b), a), 0.0, 1e-13);             // orthogonal to both factors
     CHECK_NEAR(dot(cross(a, b), b), 0.0, 1e-13);
+
+    // reflect: mirroring (1,-1,0) off the horizontal plane (normal +y) flips
+    // only the perpendicular (y) component, giving (1,1,0).
+    CHECK_VEC(reflect(Vec3{1.0, -1.0, 0.0}, Vec3{0.0, 1.0, 0.0}), (Vec3{1.0, 1.0, 0.0}), 1e-15);
+    // Reflecting straight into a surface bounces straight back.
+    CHECK_VEC(reflect(Vec3{0.0, 0.0, -1.0}, Vec3{0.0, 0.0, 1.0}), (Vec3{0.0, 0.0, 1.0}), 1e-15);
+    // A vector already in the mirror plane (perpendicular to n) is unchanged.
+    CHECK_VEC(reflect(Vec3{1.0, 0.0, 0.0}, Vec3{0.0, 0.0, 1.0}), (Vec3{1.0, 0.0, 0.0}), 1e-15);
+    // Length is preserved, and reflecting twice restores the original vector,
+    // for several unrelated, non-axis-aligned (d, n) pairs.
+    for (const auto& [d, n] : {std::pair{Vec3{2.0, -3.0, 5.0}, normalized(Vec3{1.0, 2.0, 2.0})},
+                               std::pair{Vec3{-1.0, 0.5, 4.0}, normalized(Vec3{0.0, 3.0, 4.0})},
+                               std::pair{Vec3{7.0, 7.0, -2.0}, normalized(Vec3{-1.0, 1.0, 1.0})}}) {
+        Vec3 r = reflect(d, n);
+        CHECK_NEAR(length(r), length(d), 1e-12);
+        CHECK_VEC(reflect(r, n), d, 1e-12);
+        // The component along n flips sign; the component perpendicular to n
+        // is unchanged (2.3.2's decomposition d = d_par + d_perp).
+        CHECK_NEAR(dot(r, n), -dot(d, n), 1e-12);
+        Vec3 d_perp = d - n * dot(d, n);
+        Vec3 r_perp = r - n * dot(r, n);
+        CHECK_VEC(r_perp, d_perp, 1e-12);
+    }
 }
 
 static void test_mat3() {

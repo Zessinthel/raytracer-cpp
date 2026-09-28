@@ -109,4 +109,24 @@ namespace raytracer::engine {
         return v * (1.0 / length(v));
     }
 
+    /**
+     * Reflects d across the plane with unit normal n: reflect(d, n) =
+     * d - 2*(d.n)*n. Decomposing d = d_par + d_perp (the components parallel
+     * and perpendicular to n), the reflection keeps d_par and flips d_perp,
+     * so ||reflect(d, n)|| == ||d|| whatever n's length (only its direction
+     * enters the formula).
+     *
+     * Two unrelated uses share this one formula: mirroring a ray direction
+     * off a surface (d the incoming direction, pointing into the surface),
+     * and the specular direction of Phong shading (d = -L, the vector
+     * pointing away from the light, which is why shading::phong_light calls
+     * this as reflect(L * -1.0, N) rather than duplicating the algebra).
+     * @param d the vector to reflect.
+     * @param n the unit normal of the reflecting plane.
+     * @return a new Vec3 of the same length as d.
+     */
+    inline Vec3 reflect(const Vec3& d, const Vec3& n) {
+        return d - n * (2.0 * dot(d, n));
+    }
+
 }  // namespace raytracer::engine

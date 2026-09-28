@@ -74,7 +74,7 @@ namespace cli {
             "  --width N       image width in pixels, 1 to 16384 (default 800)\n"
             "  --height N      image height in pixels, 1 to 16384 (default 300)\n"
             "  --fov DEGREES   vertical field of view, between 0 and 180 (default 40)\n"
-            "  --mode MODE     normals | albedo | lambert | distance | object-id (default normals)\n"
+            "  --mode MODE     normals | albedo | lambert | phong | distance | object-id (default normals)\n"
             "  --far X         distance drawn as black in distance mode (default 20)\n"
             "  --help          show this message\n";
     }
@@ -112,10 +112,11 @@ namespace cli {
             if (name == "normals")   return ShadingMode::normals;
             if (name == "albedo")    return ShadingMode::albedo;
             if (name == "lambert")   return ShadingMode::lambert;
+            if (name == "phong")     return ShadingMode::phong;
             if (name == "distance")  return ShadingMode::distance;
             if (name == "object-id") return ShadingMode::object_id;
             throw std::invalid_argument("--mode: unknown mode '" + name +
-                                        "' (use normals, albedo, lambert, distance or object-id)");
+                                        "' (use normals, albedo, lambert, phong, distance or object-id)");
         }
 
     }  // namespace detail

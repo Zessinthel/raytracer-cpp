@@ -57,9 +57,9 @@ int main(int argc, char** argv) {
         gallery.add(Mesh::from_triangle_mesh(mesh), material);
     };
 
-    add(translated(raytracer::engine::sphere(48, 24, 1.0),        Vec3{-7.0, 0.0, 0.0}), Material{.albedo = {0.85, 0.20, 0.20}});
+    add(translated(raytracer::engine::sphere(48, 24, 1.0),        Vec3{-7.0, 0.0, 0.0}), Material{.albedo = {0.85, 0.20, 0.20}, .specular_exponent = 500.0});
     add(translated(raytracer::engine::torus(48, 24, 1.0, 0.3),    Vec3{-4.5, 0.0, 0.0}), Material{.albedo = {0.20, 0.45, 0.85}});
-    add(translated(raytracer::engine::cylinder(10, 32, 0.8, 2.0), Vec3{-1.5, 0.0, 0.0}), Material{.albedo = {0.25, 0.70, 0.30}});
+    add(translated(raytracer::engine::cylinder(10, 32, 0.8, 2.0), Vec3{-1.5, 0.0, 0.0}), Material{.albedo = {0.25, 0.70, 0.30}, .specular_exponent = 10.0});
     add(translated(raytracer::engine::cube(1.6),                  Vec3{ 1.5, 0.0, 0.0}), Material{.albedo = {0.95, 0.55, 0.15}});
     add(translated(raytracer::engine::tetrahedron(1.1),           Vec3{ 4.5, 0.0, 0.0}), Material{.albedo = {0.65, 0.30, 0.70}});
 
@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
     add(transformed(raytracer::engine::star(),
                     rotation_x(std::numbers::pi / 2.0),
                     Vec3{7.0, 0.0, 0.0}),
-        Material{.albedo = {1.00, 0.82, 0.20}});
+        Material{.albedo = {1.00, 0.82, 0.20}, .specular_exponent = 1000.0});
 
     // Lights, with the intensities of the reference scene of the course notes
     // (ambient 0.2, point 0.6, directional 0.2: they add up to 1). Both lights
