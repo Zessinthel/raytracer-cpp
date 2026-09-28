@@ -38,21 +38,17 @@ namespace raytracer::physics {
          * engine::sphere, engine::cylinder, etc.), discarding any
          * triangle whose area falls below area_eps.
          *
-         * KNOWN LIMITATION (pending fix): discarding degenerate
-         * triangles leaves a real hole in the surface wherever a ring
-         * of the source parametrization collapses to a point (e.g. the
-         * two poles of engine::sphere) — the vertices of that ring
-         * survive in the buffer (orphaned, referenced by zero
-         * triangles), but no triangle covers that region anymore. A ray
-         * traveling exactly along the parametrization's axis of
-         * symmetry passes clean through the hole regardless of grid
-         * resolution, since the hole is always centered on that axis.
-         * TODO: cap each pole with a fan of non-degenerate triangles,
-         * built from the first non-collapsed ring plus a single new
-         * apex vertex at the exact pole point — not from the collapsed
-         * ring itself. This must be implemented in engine::sphere (and
-         * any future parametrization with a collapsing ring), not here;
-         * from_triangle_mesh should keep filtering purely by area.
+         * Where a ring of the source parametrization collapses to a point
+         * (the poles of engine::sphere, the apex of engine::cone), each quad
+         * touching that ring splits into one zero-area triangle, removed
+         * here, and one valid triangle that reaches the collapsed point. The
+         * surface therefore stays covered and no vertex is left orphaned.
+         *
+         * NOTE: a ray passing exactly through a vertex or an edge shared by
+         * several triangles (for instance a ray along a sphere's axis) may
+         * slip through under floating-point rounding, because the
+         * barycentric tests in intersect_triangle are not watertight. Rays
+         * not aligned with mesh vertices are unaffected.
          *
          * @param source vertex buffer + raw triangle list.
          * @param area_eps minimum accepted triangle area (parallelogram
@@ -85,6 +81,9 @@ namespace raytracer::physics {
          * Finds the closest valid intersection (smallest t >= 0) between
          * the ray and any triangle of this mesh, via brute-force
          * iteration over every triangle (Moller-Trumbore per triangle).
+         * The returned normal is the geometric normal given by the triangle
+         * winding (outward for closed engine primitives); it is never
+         * flipped toward the ray, so it still tells inside from outside.
          * @param ray the ray to test.
          * @return a MeshHit if some triangle is hit; std::nullopt otherwise.
          */
@@ -105,8 +104,6 @@ namespace raytracer::physics {
 
                 if (!closest || hit->t < closest->t) {
                     Vec3 face_normal = normalized(cross(v1 - v0, v2 - v0));
-                    if (dot(face_normal, ray.direction) > 0.0)
-                        face_normal = face_normal * -1.0;
                     closest = MeshHit{hit->t, face_normal, static_cast<int>(i)};
                 }
             }

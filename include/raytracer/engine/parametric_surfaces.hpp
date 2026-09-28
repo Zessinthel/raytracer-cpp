@@ -92,9 +92,12 @@ namespace raytracer::engine {
 
         mesh.triangles = grid_triangles_closed_phi(n_z, n_theta);
 
+        // The bottom ring is listed clockwise seen from +z (phi decreasing) so
+        // that the fan faces -z, outward; the top ring keeps phi increasing and
+        // faces +z.
         Polygon bottom, top;
         for (int j = 0; j < n_theta; ++j) {
-            bottom.push_back(grid_index(0, j, n_theta));
+            bottom.push_back(grid_index(0, n_theta - 1 - j, n_theta));
             top.push_back(grid_index(n_z - 1, j, n_theta));
         }
         for (const auto& t : triangulate_polygon(bottom)) mesh.triangles.push_back(t);
@@ -130,9 +133,10 @@ namespace raytracer::engine {
 
         mesh.triangles = grid_triangles_closed_phi(n_z, n_theta);
 
+        // Base ring listed clockwise seen from +z so that the fan faces -z, outward.
         Polygon bottom;
         for (int j = 0; j < n_theta; ++j)
-            bottom.push_back(grid_index(0, j, n_theta));
+            bottom.push_back(grid_index(0, n_theta - 1 - j, n_theta));
         for (const auto& t : triangulate_polygon(bottom)) mesh.triangles.push_back(t);
 
         return mesh;

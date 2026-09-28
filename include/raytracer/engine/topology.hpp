@@ -26,6 +26,8 @@ namespace raytracer::engine {
      * Fan triangulation of a convex polygon given by its vertex indices:
      * splits an N-gon into (N-2) triangles, all sharing the polygon's
      * first vertex. Precondition: polygon must be convex.
+     * Orientation: the normal follows the vertex order (right-hand rule),
+     * so a ring listed counter-clockwise seen from +z faces +z.
      * @param polygon vertex indices of a convex polygon (size >= 3).
      * @return (size-2) triangles.
      */
@@ -60,6 +62,8 @@ namespace raytracer::engine {
      * Triangulated topology for an open (n1 x n2) grid, no periodicity
      * in either direction. Covers flat planes/rectangles, Cartesian
      * domains, and any parametric surface without periodic boundaries.
+     * Orientation: the normal of every triangle is cross(d/di, d/dj), i.e.
+     * the first grid direction crossed with the second.
      * @param n1 points along the first direction (>= 2).
      * @param n2 points along the second direction (>= 2).
      * @return 2*(n1-1)*(n2-1) triangles.
@@ -76,6 +80,10 @@ namespace raytracer::engine {
      * Triangulated topology for a grid closed (periodic) in the second
      * direction, open in the first. Covers cylinder/cone lateral bodies,
      * surfaces of revolution without degeneracy at the ends.
+     * Orientation: the normal of every triangle is cross(d/dj, d/di), i.e.
+     * the periodic direction crossed with the open one. For a surface of
+     * revolution whose open coordinate i increases along the axis (cylinder,
+     * cone), this points outward.
      * @param n1 points along the open direction (>= 2).
      * @param n2 points along the periodic direction (>= 3).
      * @return 2*(n1-1)*n2 triangles.
@@ -97,11 +105,17 @@ namespace raytracer::engine {
     }
 
     /**
-     * Triangulated spherical topology: closed_phi body plus fan-triangulated
-     * caps at the two poles, where the angular grid degenerates to a point.
+     * Triangulated spherical topology: a closed_phi body over the whole
+     * colatitude range. Where the grid degenerates to a point (the two
+     * poles) each quad splits into one zero-area triangle and one valid
+     * triangle reaching the pole, so the surface stays covered; the
+     * zero-area triangles are removed later, in physics::Mesh.
+     * Orientation: the normal of every triangle is cross(d/dtheta, d/dphi),
+     * which points outward (the reverse of grid_triangles_closed_phi,
+     * because theta increases toward -z, against the axis).
      * @param n_theta points in colatitude, including poles (>= 3).
      * @param n_phi points in azimuth (>= 3).
-     * @return 2*(n_theta-2)*n_phi body triangles + 2*(n_phi-2) cap triangles.
+     * @return 2*(n_theta-1)*n_phi triangles.
      */
     inline TriangleList sphere_triangles(int n_theta, int n_phi) {
         TriangleList triangles;
@@ -112,8 +126,8 @@ namespace raytracer::engine {
                 int b = grid_index(i,   j_next, n_phi);
                 int c = grid_index(i+1, j_next, n_phi);
                 int d = grid_index(i+1, j,      n_phi);
-                triangles.push_back({a, b, c});
-                triangles.push_back({a, c, d});
+                triangles.push_back({a, c, b});
+                triangles.push_back({a, d, c});
             }
         }
         return triangles;
@@ -121,6 +135,8 @@ namespace raytracer::engine {
 
     /**
      * Triangulated toroidal topology: periodic in both directions.
+     * Orientation: the normal of every triangle is cross(d/di, d/dj); for
+     * the torus parametrized by (u, v) as (i, j) this points outward.
      * @param n1 points along the first direction (>= 3).
      * @param n2 points along the second direction (>= 3).
      * @return 2*n1*n2 triangles, doubly periodic.
@@ -135,8 +151,8 @@ namespace raytracer::engine {
                 int b = grid_index(i,      j_next, n2);
                 int c = grid_index(i_next, j_next, n2);
                 int d = grid_index(i_next, j,      n2);
-                triangles.push_back({a, b, c});
-                triangles.push_back({a, c, d});
+                triangles.push_back({a, c, b});
+                triangles.push_back({a, d, c});
             }
         }
         return triangles;
