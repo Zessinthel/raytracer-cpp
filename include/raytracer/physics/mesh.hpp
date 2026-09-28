@@ -105,6 +105,8 @@ namespace raytracer::physics {
 
                 if (!closest || hit->t < closest->t) {
                     Vec3 face_normal = normalized(cross(v1 - v0, v2 - v0));
+                    if (dot(face_normal, ray.direction) > 0.0)
+                        face_normal = face_normal * -1.0;
                     closest = MeshHit{hit->t, face_normal, static_cast<int>(i)};
                 }
             }
