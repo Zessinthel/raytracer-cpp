@@ -16,6 +16,7 @@
 #include "raytracer/engine/vec3.hpp"
 #include "raytracer/physics/mesh.hpp"
 #include "raytracer/scene/camera.hpp"
+#include "raytracer/scene/material.hpp"
 #include "raytracer/scene/scene.hpp"
 #include "raytracer/shading/render.hpp"
 #include "raytracer/shading/shading.hpp"
@@ -23,6 +24,7 @@
 using namespace raytracer::engine;
 using raytracer::physics::Mesh;
 using raytracer::scene::Camera;
+using raytracer::scene::Material;
 using raytracer::scene::Scene;
 using raytracer::shading::RenderSettings;
 using raytracer::shading::ShadingMode;
@@ -227,6 +229,33 @@ static void test_modes() {
     CHECK(equal_pairs == 0);
 }
 
+static void test_albedo_mode() {
+    // Each object shows its own material's albedo, flat: the same color at
+    // every point of its surface whatever the normal, over the sky elsewhere.
+    Scene world;
+    world.add(Mesh::from_triangle_mesh(translated(sphere(24, 24, 1.0), Vec3{-3.0, 8.0, 0.0})),
+              Material{.albedo = {0.9, 0.2, 0.1}});
+    world.add(Mesh::from_triangle_mesh(translated(sphere(24, 24, 1.0), Vec3{3.0, 8.0, 0.0})),
+              Material{.albedo = {0.1, 0.3, 0.8}});
+    world.add(Mesh::from_triangle_mesh(translated(plane(2, 2, 100.0, 100.0), Vec3{0.0, 0.0, -1.0})));   // default material
+
+    RenderSettings albedo;
+    albedo.mode = ShadingMode::albedo;
+
+    Vec3 eye{0.0, 0.0, 0.0};
+    Ray at_left = Ray{eye, normalized(Vec3{-3.0, 8.0, 0.0})};
+    Ray at_left_high = Ray{eye, normalized(Vec3{-3.0, 8.0, 0.8})};      // a different part of the same sphere
+    Ray at_right = Ray{eye, normalized(Vec3{3.0, 8.0, 0.0})};
+    Ray at_floor = Ray{eye, normalized(Vec3{0.0, 5.0, -1.0})};
+    Ray at_sky = Ray{eye, Vec3{0.0, 0.0, 1.0}};
+
+    expect_color(shade(at_left, world, albedo), 0.9, 0.2, 0.1, 0.0);
+    expect_color(shade(at_left_high, world, albedo), 0.9, 0.2, 0.1, 0.0);
+    expect_color(shade(at_right, world, albedo), 0.1, 0.3, 0.8, 0.0);
+    expect_color(shade(at_floor, world, albedo), 0.8, 0.8, 0.8, 0.0);        // Material{} default
+    expect_color(shade(at_sky, world, albedo), 0.5, 0.7, 1.0, 1e-12);        // a picture-like mode draws the sky
+}
+
 static void test_render() {
     // A floor at z = -1 seen from a camera at the origin looking along +y.
     Scene world;
@@ -266,6 +295,7 @@ int main() {
     test_scene_occluded();
     test_shading();
     test_modes();
+    test_albedo_mode();
     test_render();
     return check::report("scene_shading");
 }

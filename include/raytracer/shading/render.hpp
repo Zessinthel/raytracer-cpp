@@ -15,12 +15,15 @@ namespace raytracer::shading {
     /**
      * What the renderer draws for each pixel. Every mode answers the same
      * visibility question, which object is first along the ray and where; they
-     * differ in what they show of the answer. The three modes below use
-     * geometry only, no light: they are the maps a minimal tracer produces
-     * (normals, radial distances and object identities).
+     * differ in what they show of the answer. None of them uses light yet.
+     *
+     * The modes fall in two families. The picture-like ones (normals, albedo)
+     * draw the sky where nothing is hit. The data maps (distance, object_id)
+     * draw black there, so that a miss is not mistaken for a value.
      */
     enum class ShadingMode {
         normals,     ///< surface normal as color, over a sky gradient
+        albedo,      ///< the material's diffuse color, flat, over a sky gradient
         distance,    ///< distance t from the eye as gray, white near and black far
         object_id    ///< one flat color per object, over black
     };
@@ -83,6 +86,9 @@ namespace raytracer::shading {
         switch (settings.mode) {
             case ShadingMode::normals:
                 return hit ? normal_to_color(*hit) : background_color(ray);
+            case ShadingMode::albedo:
+                return hit ? world.material_at(static_cast<std::size_t>(hit->object_index)).albedo
+                           : background_color(ray);
             case ShadingMode::distance:
                 return hit ? distance_to_color(hit->t, settings.distance_far) : Color{0.0, 0.0, 0.0};
             case ShadingMode::object_id:
