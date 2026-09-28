@@ -48,6 +48,10 @@ add_executable(test_scene_shading tests/test_scene_shading.cpp)
 target_link_libraries(test_scene_shading PRIVATE shading scene physics engine)
 add_test(NAME scene_shading COMMAND test_scene_shading)
 
+add_executable(test_scene_data tests/test_scene_data.cpp)
+target_link_libraries(test_scene_data PRIVATE scene physics engine)
+add_test(NAME scene_data COMMAND test_scene_data)
+
 add_executable(test_io tests/test_io.cpp)
 target_link_libraries(test_io PRIVATE io engine)
 add_test(NAME io COMMAND test_io)
@@ -60,3 +64,9 @@ add_test(NAME cli COMMAND test_cli)
 add_test(NAME layering
          COMMAND ${CMAKE_COMMAND} -DROOT=${CMAKE_SOURCE_DIR}
                  -P ${CMAKE_SOURCE_DIR}/tests/check_layering.cmake)
+
+# End to end: runs the real executable and inspects the files it writes.
+add_test(NAME outputs
+         COMMAND ${CMAKE_COMMAND} -DEXE=$<TARGET_FILE:raytracer>
+                 -DWORK_DIR=${CMAKE_BINARY_DIR}/outputs_test
+                 -P ${CMAKE_SOURCE_DIR}/tests/check_outputs.cmake)

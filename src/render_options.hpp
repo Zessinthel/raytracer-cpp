@@ -7,6 +7,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstddef>
+#include <filesystem>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -16,10 +17,47 @@ namespace cli {
 
     enum class OutputFormat { ppm, png };
 
+    /** One file to write: where, and in which format. */
+    struct Output {
+        std::string path;
+        OutputFormat format;
+    };
+
+    namespace detail {
+
+        /**
+         * The files an --output value asks for. An extension picks the format
+         * (.ppm or .png, in any letter case) and writes that one file. No
+         * extension means "both": the path gets .ppm and .png appended, so the
+         * raw PPM and a PNG that opens anywhere are kept together.
+         * Only the last component of the path counts, so a dot in a directory
+         * name (shots/v0.1/final) is not mistaken for an extension.
+         */
+        inline std::vector<Output> outputs_for(const std::string& path) {
+            std::filesystem::path file(path);
+            std::string name = file.filename().string();
+            if (name.empty() || name == "." || name == "..")
+                throw std::invalid_argument("--output: '" + path + "' does not name a file");
+
+            std::string extension = file.extension().string();
+            std::transform(extension.begin(), extension.end(), extension.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+            if (extension.empty())
+                return {{path + ".ppm", OutputFormat::ppm}, {path + ".png", OutputFormat::png}};
+            if (extension == ".ppm")
+                return {{path, OutputFormat::ppm}};
+            if (extension == ".png")
+                return {{path, OutputFormat::png}};
+            throw std::invalid_argument("--output: '" + path +
+                                        "' must end in .ppm or .png, or have no extension to write both");
+        }
+
+    }  // namespace detail
+
     /** Everything the command line can configure. */
     struct Options {
-        std::string output = "gallery.ppm";
-        OutputFormat format = OutputFormat::ppm;
+        std::vector<Output> outputs = detail::outputs_for("gallery");   // gallery.ppm and gallery.png
         int width = 800;
         int height = 300;
         double fov_degrees = 40.0;
@@ -31,11 +69,12 @@ namespace cli {
     inline std::string usage() {
         return
             "usage: raytracer [options]\n"
-            "  --output PATH   output image, .ppm or .png (default gallery.ppm)\n"
+            "  --output PATH   .ppm or .png writes only that format; a path with no extension\n"
+            "                  writes both PATH.ppm and PATH.png (default gallery)\n"
             "  --width N       image width in pixels, 1 to 16384 (default 800)\n"
             "  --height N      image height in pixels, 1 to 16384 (default 300)\n"
             "  --fov DEGREES   vertical field of view, between 0 and 180 (default 40)\n"
-            "  --mode MODE     normals | distance | object-id (default normals)\n"
+            "  --mode MODE     normals | albedo | distance | object-id (default normals)\n"
             "  --far X         distance drawn as black in distance mode (default 20)\n"
             "  --help          show this message\n";
     }
@@ -68,23 +107,14 @@ namespace cli {
             return value;
         }
 
-        inline OutputFormat format_from_path(const std::string& path) {
-            std::size_t dot = path.rfind('.');
-            std::string extension = (dot == std::string::npos) ? "" : path.substr(dot + 1);
-            std::transform(extension.begin(), extension.end(), extension.begin(),
-                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-            if (extension == "ppm") return OutputFormat::ppm;
-            if (extension == "png") return OutputFormat::png;
-            throw std::invalid_argument("--output: '" + path + "' must end in .ppm or .png");
-        }
-
         inline raytracer::shading::ShadingMode mode_from_name(const std::string& name) {
             using raytracer::shading::ShadingMode;
             if (name == "normals")   return ShadingMode::normals;
+            if (name == "albedo")    return ShadingMode::albedo;
             if (name == "distance")  return ShadingMode::distance;
             if (name == "object-id") return ShadingMode::object_id;
             throw std::invalid_argument("--mode: unknown mode '" + name +
-                                        "' (use normals, distance or object-id)");
+                                        "' (use normals, albedo, distance or object-id)");
         }
 
     }  // namespace detail
@@ -92,7 +122,7 @@ namespace cli {
     /**
      * Parses the command-line arguments (without the program name).
      * A flag given twice keeps its last value.
-     * @param args the arguments, e.g. {"--mode", "distance", "--output", "d.png"}.
+     * @param args the arguments, e.g. {"--mode", "distance", "--output", "d"}.
      * @return the options, defaults filled in for whatever was not given.
      * @throws std::invalid_argument for an unknown flag, a missing or malformed
      *         value, or a value out of range; the message says which.
@@ -111,8 +141,7 @@ namespace cli {
             if (flag == "--help") {
                 options.help = true;
             } else if (flag == "--output") {
-                options.output = value();
-                options.format = detail::format_from_path(options.output);
+                options.outputs = detail::outputs_for(value());
             } else if (flag == "--width") {
                 options.width = detail::parse_int(flag, value());
                 if (options.width < 1 || options.width > 16384)
