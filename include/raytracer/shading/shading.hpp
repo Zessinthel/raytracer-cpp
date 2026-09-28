@@ -18,7 +18,7 @@ namespace raytracer::shading {
 
     /**
      * Background color for rays that hit nothing: a vertical gradient
-     * from white (bottom) to soft blue (top), based on the ray's own
+     * from white (down, -z) to soft blue (up, +z), based on the ray's own
      * direction rather than any scene data — a simple visual cue that
      * "nothing was hit" without being flat black.
      * @param ray the ray that missed every object in the scene.
@@ -27,7 +27,7 @@ namespace raytracer::shading {
     inline Color background_color(const raytracer::engine::Ray& ray) {
         using raytracer::engine::normalized;
         raytracer::engine::Vec3 unit_direction = normalized(ray.direction);
-        double t = 0.5 * (unit_direction.y + 1.0);
+        double t = 0.5 * (unit_direction.z + 1.0);
         return Color{
             (1.0 - t) * 1.0 + t * 0.5,
             (1.0 - t) * 1.0 + t * 0.7,
