@@ -121,6 +121,29 @@ namespace raytracer::physics {
             return closest;
         }
 
+        /**
+         * Tells whether any triangle of this mesh is hit by the ray with t in
+         * [t_min, t_max). This is the yes/no question of a shadow ray
+         * (OCLUIDO in the course notes): it stops at the first triangle
+         * found, because which triangle it is, or how far, does not matter,
+         * and so it is cheaper than intersect(), which has to look at every
+         * triangle to find the closest.
+         * @param ray the ray to test; with a unit direction, t is a distance.
+         * @param t_min lower end of the accepted interval (inclusive).
+         * @param t_max upper end of the accepted interval (exclusive); use
+         *              engine::T_INFINITE for no upper bound.
+         * @return true if some triangle is hit within the interval.
+         */
+        bool occluded(const raytracer::engine::Ray& ray, double t_min, double t_max) const {
+            for (const auto& tri : triangles_) {
+                if (intersect_triangle(ray.origin, ray.direction,
+                                       vertices_[tri[0]], vertices_[tri[1]], vertices_[tri[2]],
+                                       t_min, t_max))
+                    return true;
+            }
+            return false;
+        }
+
         /** @return number of vertices in this mesh. */
         std::size_t vertex_count() const { return vertices_.size(); }
 

@@ -70,6 +70,25 @@ namespace raytracer::scene {
             return closest;
         }
 
+        /**
+         * Tells whether any object in the scene is hit by the ray with t in
+         * [t_min, t_max), stopping at the first one found (OCLUIDO in the
+         * course notes). Use it for shadow rays, where only the existence of
+         * an obstacle matters.
+         * @param ray the ray to test; with a unit direction, t is a distance.
+         * @param t_min lower end of the accepted interval (inclusive).
+         * @param t_max upper end of the accepted interval (exclusive); use
+         *              engine::T_INFINITE for no upper bound.
+         * @return true if some object is hit within the interval.
+         */
+        bool occluded(const raytracer::engine::Ray& ray, double t_min, double t_max) const {
+            for (const auto& object : objects_) {
+                if (object.occluded(ray, t_min, t_max))
+                    return true;
+            }
+            return false;
+        }
+
         /** @return number of objects currently in the scene. */
         std::size_t object_count() const { return objects_.size(); }
 

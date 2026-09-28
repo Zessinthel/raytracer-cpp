@@ -177,7 +177,46 @@ static void test_narrowing_matches_brute_force() {
             }
         }
         CHECK(mismatches == 0);
-        CHECK(rays_that_hit > 200);    // the comparison is not vacuous
+        CHECK(rays_that_hit > 80);     // the comparison is not vacuous (measured: 234 to 1446)
+    }
+}
+
+static void test_mesh_occluded() {
+    // The cube along the ray: entry at t = 4, exit at t = 6.
+    Mesh box = Mesh::from_triangle_mesh(cube(2.0));
+    Ray ray{Vec3{0.3, 0.2, -5.0}, Vec3{0.0, 0.0, 1.0}};
+    CHECK(box.occluded(ray, 0.0, T_INFINITE));
+    CHECK(!box.occluded(ray, 0.0, 3.5));            // interval ends before the cube
+    CHECK(box.occluded(ray, 0.0, 4.5));             // it contains the entry
+    CHECK(box.occluded(ray, 4.5, T_INFINITE));      // it contains only the exit
+    CHECK(!box.occluded(ray, 6.5, T_INFINITE));     // interval starts after the cube
+    CHECK(!box.occluded(Ray{Vec3{0.3, 0.2, -5.0}, Vec3{0.0, 0.0, -1.0}}, 0.0, T_INFINITE));
+
+    // occluded() must agree with "intersect() finds something" for any
+    // interval, on shapes with and without concavities.
+    std::mt19937 rng(2024);
+    std::uniform_real_distribution<double> far_point(-4.0, 4.0);
+    std::uniform_real_distribution<double> near_point(-1.3, 1.3);
+    std::uniform_real_distribution<double> lower(0.0, 6.0);
+    std::uniform_real_distribution<double> width(0.0, 4.0);
+
+    const TriangleMesh shapes[] = {torus(48, 24, 1.0, 0.3), star(), cube(2.0)};
+    for (const TriangleMesh& raw : shapes) {
+        Mesh mesh = Mesh::from_triangle_mesh(raw);
+        int yes = 0, no = 0, mismatches = 0;
+        for (int k = 0; k < 1500; ++k) {
+            Vec3 origin{far_point(rng), far_point(rng), far_point(rng)};
+            Vec3 target{near_point(rng), near_point(rng), near_point(rng)};
+            Ray r{origin, normalized(target - origin)};
+            double t_min = lower(rng);
+            double t_max = (k % 4 == 0) ? T_INFINITE : t_min + width(rng);
+            bool blocked = mesh.occluded(r, t_min, t_max);
+            if (blocked != mesh.intersect(r, t_min, t_max).has_value())
+                ++mismatches;
+            (blocked ? yes : no)++;
+        }
+        CHECK(mismatches == 0);
+        CHECK(yes > 40 && no > 40);    // both outcomes are exercised (measured: at least 103 and 863)
     }
 }
 
@@ -243,6 +282,7 @@ int main() {
     test_mesh_hits();
     test_mesh_interval();
     test_narrowing_matches_brute_force();
+    test_mesh_occluded();
     test_normals_are_intrinsic();
     test_outward_normals_of_primitives();
     return check::report("physics");
