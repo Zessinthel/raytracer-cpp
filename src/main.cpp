@@ -11,6 +11,7 @@
 #include "raytracer/scene/scene.hpp"
 #include "raytracer/shading/shading.hpp"
 #include "raytracer/io/ppm_writer.hpp"
+#include "raytracer/engine/polyhedra.hpp"
 
 
 int main(){
@@ -30,7 +31,12 @@ int main(){
     using raytracer::shading::shade;
     using raytracer::shading::Color;
     using raytracer::scene::Camera;
-
+    using raytracer::engine::torus;
+    using raytracer::engine::cylinder;
+    using raytracer::engine::cube;
+    using raytracer::engine::tetrahedron;
+    using raytracer::engine::TriangleMesh;
+    using raytracer::engine::star;
 
     Vec3 O{0.0, 0.0, -5.0};
     Vec3 C{0.0, 0.0, 0.0};
@@ -203,21 +209,46 @@ int main(){
     Color c_miss = shade(miss_ray, test_scene);
     std::cout << "shade(miss) = (" << c_miss.r << ", " << c_miss.g << ", " << c_miss.b << ")\n";
 
-
     Scene render_scene;
-    render_scene.add(Mesh::from_triangle_mesh(sphere(20, 20, 1.0)));
+    render_scene.add(Mesh::from_triangle_mesh(sphere(40, 40, 1.0)));
 
+    //Render esfera
     Camera render_cam(
         Vec3{0.0, 0.0, 3.0},   // origin: un poco alejado de la esfera
         Vec3{0.0, 0.0, 0.0},   // look_at: mirando al centro de la esfera
         Vec3{0.0, 1.0, 0.0},   // up
         60.0,                   // vfov_degrees
-        540, 480                // resolucion
+        400, 300                // resolucion
     );
 
     raytracer::io::write_ppm("render.ppm", render_cam, render_scene);
+
+    //Render Galeria
+    auto moved = [](TriangleMesh m, Vec3 offset) {
+        for (auto& v : m.vertices) v = v + offset;
+        return m;
+    };
+
+    Scene gallery;
+    gallery.add(Mesh::from_triangle_mesh(moved(torus(48, 24, 1.0, 0.3),  Vec3{-4.5, 0, 0})));
+    gallery.add(Mesh::from_triangle_mesh(moved(cylinder(10, 32, 0.8, 2.0), Vec3{-1.5, 0, 0})));
+    gallery.add(Mesh::from_triangle_mesh(moved(cube(1.6),                 Vec3{ 1.5, 0, 0})));
+    gallery.add(Mesh::from_triangle_mesh(moved(tetrahedron(1.1),          Vec3{ 4.5, 0, 0})));
+
+    Camera gallery_cam(Vec3{0.0, 5.0, 10.0}, Vec3{0.0, 0.0, 0.0}, Vec3{0.0, 1.0, 0.0},
+                    40.0, 800, 300);
+    raytracer::io::write_ppm("gallery.ppm", gallery_cam, gallery);
     std::cout << "Imagen escrita en render.ppm\n";
 
+    
+    Scene star_scene;
+    star_scene.add(Mesh::from_triangle_mesh(star()));
+    Camera star_cam(Vec3{0.8, 0.6, 5.0}, Vec3{0.0, 0.0, 0.0}, Vec3{0.0, 1.0, 0.0},
+                    35.0, 500, 500);
+    raytracer::io::write_ppm("star.ppm", star_cam, star_scene);
+    
     return 0;
+
+
 
 }
