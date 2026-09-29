@@ -4,6 +4,18 @@ project(raytracer_v0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# The raytracer is brute-force and leans heavily on small inline functions
+# (Vec3 arithmetic, dot/cross, reflect, intersect_triangle) in hot loops that
+# run billions of times per render; without optimization those never get
+# inlined, and a plain `cmake -S . -B build` with no build type otherwise
+# compiles at -O0 on a Makefiles generator. Defaulting to Release here (only
+# when the user hasn't asked for something else, e.g. -DCMAKE_BUILD_TYPE=Debug
+# for the sanitizer builds) is the single highest-impact performance fix in
+# this project, ahead of any algorithmic change.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
 add_library(engine INTERFACE)
 target_include_directories(engine INTERFACE include)
 
