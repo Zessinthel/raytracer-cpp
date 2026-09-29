@@ -8,12 +8,15 @@
 // the lambert and phong render modes.
 // Links against `shading`, `scene`, `physics` and `engine`.
 #include <cmath>
+#include <cstddef>
 #include <numbers>
+#include <vector>
 
 #include "check.hpp"
 #include "raytracer/engine/color.hpp"
 #include "raytracer/engine/image.hpp"
 #include "raytracer/engine/parametric_surfaces.hpp"
+#include "raytracer/engine/polyhedra.hpp"
 #include "raytracer/engine/ray.hpp"
 #include "raytracer/engine/transform.hpp"
 #include "raytracer/engine/vec3.hpp"
@@ -33,6 +36,7 @@ using raytracer::scene::Material;
 using raytracer::scene::PointLight;
 using raytracer::scene::Scene;
 using raytracer::shading::RenderSettings;
+using raytracer::shading::SHADOW_EPSILON;
 using raytracer::shading::ShadingMode;
 using raytracer::shading::diffuse_color;
 using raytracer::shading::diffuse_light;
@@ -40,6 +44,7 @@ using raytracer::shading::phong_color;
 using raytracer::shading::phong_light;
 using raytracer::shading::shade;
 using raytracer::shading::render;
+using raytracer::shading::trace_ray;
 
 constexpr double pi = std::numbers::pi;
 constexpr double degrees = pi / 180.0;
@@ -447,6 +452,361 @@ static void test_phong_mode() {
     expect_color(sky, 0.5, 0.7, 1.0, 1e-12);
 }
 
+// ---- Shadows (2.4.2, Algorithm 2.7 line 7) --------------------------------
+
+static void test_shadow_blocks_diffuse_and_specular() {
+    // A small occluder sits directly between a floor point and a directional
+    // light straight up. The point still has n.l > 0 (nothing about the
+    // surface orientation changed), so without the occlusion test it would be
+    // lit; with it, the light must contribute nothing at all.
+    Scene scene;
+    scene.set_ambient(0.2);
+    scene.add_light(DirectionalLight{Vec3{0.0, 0.0, 1.0}, 0.6});
+    scene.add(Mesh::from_triangle_mesh(translated(cube(1.0), Vec3{0.0, 0.0, 3.0})),
+              Material{.albedo = {0.9, 0.9, 0.9}, .specular_exponent = 100.0});   // the occluder
+
+    Vec3 shadowed_point{0.0, 0.0, 0.0};
+    Vec3 lit_point{5.0, 5.0, 0.0};       // far enough that the 1-unit cube cannot block it
+    Vec3 up_normal{0.0, 0.0, 1.0};
+
+    CHECK_NEAR(diffuse_light(scene, shadowed_point, up_normal), 0.2, 0.0);          // ambient only
+    CHECK_NEAR(diffuse_light(scene, lit_point, up_normal), 0.2 + 0.6, 1e-12);       // full daylight
+
+    Vec3 view{0.0, 0.0, 1.0};
+    CHECK_NEAR(phong_light(scene, shadowed_point, up_normal, view, 100.0), 0.2, 0.0);   // no specular either
+    CHECK_NEAR(phong_light(scene, lit_point, up_normal, view, 100.0), 0.2 + 0.6 + 0.6, 1e-12);   // peak: R.V=1
+}
+
+static void test_point_light_beyond_occluder_is_still_shadowed() {
+    // The reverse of the point-light distance test below: an occluder BETWEEN
+    // the point and a point light must block it, exactly like a directional
+    // light does, since the shadow ray's t_max = distance-to-light only
+    // matters for occluders beyond the light, not before it.
+    Scene scene;
+    scene.add_light(PointLight{Vec3{0.0, 0.0, 5.0}, 1.0});
+    scene.add(Mesh::from_triangle_mesh(translated(cube(1.0), Vec3{0.0, 0.0, 2.5})));   // between point and light
+
+    CHECK_NEAR(diffuse_light(scene, origin, up), 0.0, 0.0);
+}
+
+static void test_point_light_does_not_shadow_past_itself() {
+    // 2.4.2: "un objeto mas alla de la fuente ... no la ocluye", because the
+    // shadow ray's interval ends at t_max = ||L|| (the light's own distance).
+    // An occluder placed farther than the light, exactly along the same line,
+    // must not block it, even though a naive unbounded shadow ray would hit it.
+    Scene scene;
+    scene.add_light(PointLight{Vec3{0.0, 0.0, 5.0}, 1.0});
+    scene.add(Mesh::from_triangle_mesh(translated(cube(1.0), Vec3{0.0, 0.0, 10.0})));   // beyond the light
+
+    CHECK_NEAR(diffuse_light(scene, origin, up), 1.0, 1e-12);       // fully lit: the occluder is irrelevant
+
+    // Confirm the geometry is not accidentally missing the occluder outright:
+    // an unbounded ray in the same direction does hit it.
+    CHECK(scene.occluded(Ray{origin, up}, SHADOW_EPSILON, T_INFINITE));
+}
+
+static void test_shadow_footprint_matches_analytic_geometry() {
+    // A cube of side 2 floats above an infinite-looking floor (z in [2,4],
+    // horizontal extent [-1,1]^2), lit by a directional light straight up.
+    // Parallel rays mean the shadow it casts on the floor is exactly its own
+    // horizontal cross-section: the square [-1,1]^2, independent of height.
+    // This footprint is closed-form, so it is checked exactly, not measured.
+    Scene scene;
+    scene.set_ambient(0.2);
+    scene.add_light(DirectionalLight{Vec3{0.0, 0.0, 1.0}, 0.6});
+    scene.add(Mesh::from_triangle_mesh(plane(2, 2, 400.0, 400.0)), Material{.albedo = {0.7, 0.7, 0.7}});
+    scene.add(Mesh::from_triangle_mesh(translated(cube(2.0), Vec3{0.0, 0.0, 3.0})));
+
+    int inside_wrong = 0, outside_wrong = 0, inside_n = 0, outside_n = 0;
+    for (int a = -19; a <= 19; ++a) {
+        for (int b = -19; b <= 19; ++b) {
+            double x = a / 10.0, y = b / 10.0;                      // steps of 0.1, avoiding the exact edge
+            if (std::abs(std::abs(x) - 1.0) < 0.05 || std::abs(std::abs(y) - 1.0) < 0.05)
+                continue;                                            // skip points too close to the boundary
+            double light = diffuse_light(scene, Vec3{x, y, 0.0}, up);
+            bool inside = std::abs(x) < 1.0 && std::abs(y) < 1.0;
+            if (inside) {
+                ++inside_n;
+                if (std::abs(light - 0.2) > 1e-9) ++inside_wrong;     // must be ambient-only
+            } else {
+                ++outside_n;
+                if (std::abs(light - 0.8) > 1e-9) ++outside_wrong;    // must be fully lit
+            }
+        }
+    }
+    CHECK(inside_n > 100 && outside_n > 100);      // the comparison is not vacuous
+    CHECK(inside_wrong == 0);
+    CHECK(outside_wrong == 0);
+}
+
+static void test_shadow_acne_disappears_with_epsilon() {
+    // The classic case (2.4.2): a ray leaving a curved mesh exactly along its
+    // own (approximate) outward normal must never legitimately re-intersect a
+    // convex surface, so any occlusion found is spurious self-intersection
+    // caused by P = O + t*D not satisfying F(P) = 0 exactly. Using real hit
+    // points from real primary rays against a real sphere mesh (not points
+    // constructed to already lie exactly on the analytic surface) reproduces
+    // the artifact as it actually occurs, rather than assuming it.
+    Mesh ball = Mesh::from_triangle_mesh(sphere(48, 48, 1.0));
+
+    int acne_at_zero = 0, acne_at_epsilon = 0, samples = 0;
+    for (int a = -24; a <= 24; ++a) {
+        for (int b = -24; b <= 24; ++b) {
+            double x = a / 25.0, z = b / 25.0;
+            if (x * x + z * z > 0.9) continue;
+            auto hit = ball.intersect(Ray{Vec3{x, -5.0, z}, Vec3{0.0, 1.0, 0.0}}, 0.0, T_INFINITE);
+            if (!hit) continue;
+            ++samples;
+            Vec3 p = Vec3{x, -5.0, z} + Vec3{0.0, 1.0, 0.0} * hit->t;   // the real, rounded hit point
+            Vec3 outward = hit->normal;                                  // leaves the convex body if p is exact
+            if (ball.occluded(Ray{p, outward}, 0.0, T_INFINITE)) ++acne_at_zero;
+            if (ball.occluded(Ray{p, outward}, SHADOW_EPSILON, T_INFINITE)) ++acne_at_epsilon;
+        }
+    }
+    CHECK(samples > 1000);                 // measured: about 1800
+    CHECK(acne_at_zero > 0);               // the artifact is real, not hypothetical, on this mesh
+    CHECK(acne_at_epsilon == 0);           // and SHADOW_EPSILON removes it completely
+}
+
+static void test_shadows_do_not_change_unoccluded_results() {
+    // A regression against Step 9: with no other objects in the scene (so
+    // nothing can ever occlude), diffuse_light and phong_light must return
+    // exactly what they did before shadows existed.
+    Scene scene;
+    scene.set_ambient(0.2);
+    scene.add_light(PointLight{Vec3{1.0, -2.0, 3.0}, 0.5});
+    scene.add_light(DirectionalLight{Vec3{-1.0, 1.0, 1.0}, 0.3});
+
+    CHECK_NEAR(diffuse_light(scene, origin, up), 0.2 + 0.5 * dot(up, normalized(Vec3{1.0,-2.0,3.0}-origin)) + 0.3 * dot(up, normalized(Vec3{-1.0,1.0,1.0})), 1e-12);
+    // And the earlier lobe-width/peak scene (no other objects) is unaffected.
+    Scene overhead = overhead_light_scene();
+    CHECK_NEAR(specular_at_angle(overhead, 50.0, 0.0), 1.0, 1e-12);
+}
+
+// ---- Reflections (2.4.2, Algorithm 2.9) -----------------------------------
+
+static void test_mirror_direction_closed_form() {
+    // 2.4.2: R = 2(N.V)N - V = D - 2(N.D)N, with V = -D. Both forms must
+    // agree, and the second form is exactly engine::reflect(D, N) with the
+    // INCIDENT direction D, no sign flip needed -- which is what trace_ray
+    // relies on.
+    Vec3 Ds[3] = {normalized(Vec3{1.0, 2.0, -1.0}), normalized(Vec3{-2.0, 1.0, 3.0}), normalized(Vec3{0.3, -0.9, 0.1})};
+    Vec3 Ns[3] = {normalized(Vec3{0.0, 0.0, 1.0}), normalized(Vec3{1.0, 1.0, 1.0}), normalized(Vec3{0.0, 1.0, 0.0})};
+    for (int k = 0; k < 3; ++k) {
+        Vec3 D = Ds[k];
+        Vec3 N = Ns[k];
+        Vec3 V = D * -1.0;
+        Vec3 via_V = N * (2.0 * dot(N, V)) - V;
+        Vec3 via_D = reflect(D, N);
+        CHECK_VEC(via_V, via_D, 1e-12);
+        CHECK_NEAR(length(via_D), length(D), 1e-12);
+    }
+}
+
+static void test_trace_ray_terminates_at_zero_depth_or_zero_reflectivity() {
+    // Line 9 of Algorithm 2.9: with depth = 0, or reflectivity = 0, the
+    // result is exactly saturate(local color) -- in particular a reflective
+    // material at depth 0 must NOT recurse.
+    Scene scene;
+    scene.set_ambient(0.4);
+    scene.add(Mesh::from_triangle_mesh(plane(3, 3, 10.0, 10.0)),
+              Material{.albedo = {0.6, 0.3, 0.9}, .reflectivity = 0.9});
+    Ray ray{Vec3{0.0, 0.0, 5.0}, Vec3{0.0, 0.0, -1.0}};
+
+    Color at_zero_depth = trace_ray(scene, ray, 0.0, T_INFINITE, 0);
+    Color expected = saturate(Color{0.6, 0.3, 0.9} * 0.4);
+    CHECK_NEAR(at_zero_depth.r, expected.r, 1e-12);
+    CHECK_NEAR(at_zero_depth.g, expected.g, 1e-12);
+    CHECK_NEAR(at_zero_depth.b, expected.b, 1e-12);
+
+    Scene matte;
+    matte.set_ambient(0.4);
+    matte.add(Mesh::from_triangle_mesh(plane(3, 3, 10.0, 10.0)), Material{.albedo = {0.6, 0.3, 0.9}});
+    Color matte_color = trace_ray(matte, ray, 0.0, T_INFINITE, 5);
+    CHECK_NEAR(matte_color.r, expected.r, 1e-12);
+    CHECK_NEAR(matte_color.g, expected.g, 1e-12);
+    CHECK_NEAR(matte_color.b, expected.b, 1e-12);
+}
+
+static void test_trace_ray_matches_the_recursive_formula_exactly() {
+    // A mirror plane (r = 0.5) whose reflected ray always escapes straight up
+    // to a second, non-reflective plane of a different, spatially uniform
+    // color (ambient-only lighting, so each plane's local color is constant
+    // everywhere on it). With only two distinct local colors in the whole
+    // chain, line 12's combination collapses to a single expression for any
+    // depth >= 1, checked here to machine precision.
+    Scene scene;
+    scene.set_ambient(1.0);
+    Color c0{0.8, 0.1, 0.1};
+    Color c1{0.1, 0.1, 0.8};
+    double r = 0.5;
+    scene.add(Mesh::from_triangle_mesh(plane(3, 3, 10.0, 10.0)), Material{.albedo = c0, .reflectivity = r});
+    scene.add(Mesh::from_triangle_mesh(translated(plane(3, 3, 10.0, 10.0), Vec3{0.0, 0.0, 10.0})),
+              Material{.albedo = c1});
+
+    Ray down{Vec3{0.0, 0.0, 5.0}, Vec3{0.0, 0.0, -1.0}};
+    Color expected = saturate((1.0 - r) * c0 + r * c1);
+    int depths[4] = {1, 2, 5, 10};
+    for (int depth : depths) {
+        Color got = trace_ray(scene, down, 0.0, T_INFINITE, depth);
+        CHECK_NEAR(got.r, expected.r, 1e-12);
+        CHECK_NEAR(got.g, expected.g, 1e-12);
+        CHECK_NEAR(got.b, expected.b, 1e-12);
+    }
+}
+
+static void test_two_facing_mirrors_terminate() {
+    // The "infinite hallway" the notes name explicitly: two perfectly
+    // reflective (r = 1) parallel planes facing each other never lose
+    // energy, so only the depth limit stops the recursion.
+    Scene hallway;
+    hallway.set_ambient(1.0);
+    hallway.add(Mesh::from_triangle_mesh(plane(3, 3, 10.0, 10.0)),
+                Material{.albedo = {1.0, 0.0, 0.0}, .reflectivity = 1.0});
+    hallway.add(Mesh::from_triangle_mesh(translated(plane(3, 3, 10.0, 10.0), Vec3{0.0, 0.0, 10.0})),
+                Material{.albedo = {0.0, 0.0, 1.0}, .reflectivity = 1.0});
+
+    Ray between{Vec3{0.0, 0.0, 5.0}, Vec3{0.0, 0.0, -1.0}};
+    int depths[5] = {0, 1, 5, 20, 32};
+    for (int depth : depths) {
+        Color c = trace_ray(hallway, between, 0.0, T_INFINITE, depth);
+        CHECK(c.r >= 0.0 && c.r <= 1.0);
+        CHECK(c.g >= 0.0 && c.g <= 1.0);
+        CHECK(c.b >= 0.0 && c.b <= 1.0);
+        CHECK(std::isfinite(c.r) && std::isfinite(c.g) && std::isfinite(c.b));
+    }
+
+    Color d0 = trace_ray(hallway, between, 0.0, T_INFINITE, 0);
+    Color d1 = trace_ray(hallway, between, 0.0, T_INFINITE, 1);
+    Color d2 = trace_ray(hallway, between, 0.0, T_INFINITE, 2);
+    CHECK(std::abs(d0.r - d1.r) > 0.1);
+    CHECK(std::abs(d1.r - d2.r) > 0.1);
+}
+
+static void test_truncation_error_decays_geometrically() {
+    // 2.4.2: with uniform reflectivity r, the truncation error decays
+    // geometrically as r^(d+1). Rather than aiming for the notes'
+    // illustrative "16 levels" figure for r=0.5 -- which assumes the
+    // worst-case Delta_c=1, not the actual color spread of any particular
+    // scene -- this measures the real decay ratio error(d+1)/error(d) in a
+    // genuinely bouncing scene (the same two-mirror hallway as the
+    // termination test, with r<1 so it converges) and checks it equals r
+    // almost exactly at several consecutive depths: a stronger,
+    // scene-independent confirmation of the formula than matching one
+    // illustrative number.
+    auto measure_errors = [](double r) {
+        Scene hallway;
+        hallway.set_ambient(1.0);
+        hallway.add(Mesh::from_triangle_mesh(plane(3, 3, 10.0, 10.0)),
+                    Material{.albedo = {0.9, 0.2, 0.1}, .reflectivity = r});
+        hallway.add(Mesh::from_triangle_mesh(translated(plane(3, 3, 10.0, 10.0), Vec3{0.0, 0.0, 10.0})),
+                    Material{.albedo = {0.1, 0.2, 0.9}, .reflectivity = r});
+        Ray between{Vec3{0.0, 0.0, 5.0}, Vec3{0.0, 0.0, -1.0}};
+        Color reference = trace_ray(hallway, between, 0.0, T_INFINITE, 25);
+
+        std::vector<double> errors;
+        for (int d = 0; d <= 5; ++d) {
+            Color c = trace_ray(hallway, between, 0.0, T_INFINITE, d);
+            double dr = std::abs(c.r - reference.r);
+            double dg = std::abs(c.g - reference.g);
+            double db = std::abs(c.b - reference.b);
+            errors.push_back(std::max(dr, std::max(dg, db)));
+        }
+        return errors;
+    };
+
+    double rs[2] = {0.2, 0.5};
+    for (double r : rs) {
+        std::vector<double> errors = measure_errors(r);
+        for (std::size_t d = 0; d < errors.size(); ++d)
+            CHECK(errors[d] <= std::pow(r, static_cast<double>(d) + 1.0) + 1e-9);   // the notes' bound
+        for (std::size_t d = 0; d + 1 < errors.size(); ++d) {
+            CHECK(errors[d] > 0.0);
+            double ratio = errors[d + 1] / errors[d];
+            CHECK_NEAR(ratio, r, 1e-6);                    // the geometric decay itself (bounded by the reference's own residual at depth 25, ~1.5e-8 for r=0.5)
+        }
+    }
+}
+
+static void test_saturate_clamps_overexposed_colors() {
+    // Neither line 9 nor line 12 of Algorithm 2.9 leaves the sum unclamped: an
+    // overexposed scene (ambient = 2.0, so local colors reach 2.0 before any
+    // clamping) must come back exactly at 1.0 through both return paths, not
+    // at some larger, invalid value. This is the case the earlier tests in
+    // this file miss entirely, since none of them ever produce a color
+    // outside [0, 1] before the final saturate -- so a missing saturate()
+    // call at either line would otherwise go undetected.
+    Scene hallway;
+    hallway.set_ambient(2.0);
+    hallway.add(Mesh::from_triangle_mesh(plane(3, 3, 10.0, 10.0)),
+                Material{.albedo = {1.0, 1.0, 1.0}, .reflectivity = 0.5});
+    hallway.add(Mesh::from_triangle_mesh(translated(plane(3, 3, 10.0, 10.0), Vec3{0.0, 0.0, 10.0})),
+                Material{.albedo = {1.0, 1.0, 1.0}, .reflectivity = 0.0});
+    Ray between{Vec3{0.0, 0.0, 5.0}, Vec3{0.0, 0.0, -1.0}};
+
+    Color at_depth_0 = trace_ray(hallway, between, 0.0, T_INFINITE, 0);
+    CHECK_NEAR(at_depth_0.r, 1.0, 0.0);
+    CHECK_NEAR(at_depth_0.g, 1.0, 0.0);
+    CHECK_NEAR(at_depth_0.b, 1.0, 0.0);
+
+    Color at_depth_1 = trace_ray(hallway, between, 0.0, T_INFINITE, 1);
+    CHECK_NEAR(at_depth_1.r, 1.0, 0.0);
+    CHECK_NEAR(at_depth_1.g, 1.0, 0.0);
+    CHECK_NEAR(at_depth_1.b, 1.0, 0.0);
+}
+
+static void test_reflection_shows_the_other_object() {
+    // 2.4.1's qualitative claim: a mirror shows what is geometrically in its
+    // reflection direction, not just its own local color. A ray from
+    // (-5,0,3) aimed at the origin on a mirror plane (z=0, facing +z)
+    // reflects, by construction, toward (5,0,3): a green cube placed exactly
+    // there must be what the mirror shows. (A mirror lying flat with the eye
+    // directly above it, by contrast, only ever reflects straight back up
+    // toward the sky -- this geometry is deliberately angled instead.)
+    Scene scene;
+    scene.set_ambient(1.0);
+    scene.add(Mesh::from_triangle_mesh(plane(3, 3, 10.0, 10.0)),
+              Material{.albedo = {0.1, 0.1, 0.1}, .reflectivity = 1.0});
+    scene.add(Mesh::from_triangle_mesh(translated(cube(2.0), Vec3{5.0, 0.0, 3.0})),
+              Material{.albedo = {0.0, 0.9, 0.0}});
+
+    Vec3 eye{-5.0, 0.0, 3.0};
+    Vec3 direction = normalized(Vec3{0.0, 0.0, 0.0} - eye);
+    Color seen = trace_ray(scene, Ray{eye, direction}, 0.0, T_INFINITE, 3);
+    CHECK(seen.g > seen.r + 0.3);
+    CHECK(seen.g > seen.b + 0.3);
+}
+
+static void test_whitted_mode() {
+    RenderSettings whitted;
+    whitted.mode = ShadingMode::whitted;
+    whitted.max_depth = 3;
+
+    Scene scene;
+    scene.set_ambient(1.0);
+    scene.add(Mesh::from_triangle_mesh(plane(3, 3, 10.0, 10.0)),
+              Material{.albedo = {0.1, 0.1, 0.1}, .reflectivity = 0.8});
+    scene.add(Mesh::from_triangle_mesh(translated(cube(1.0), Vec3{0.0, 0.0, -3.0})),
+              Material{.albedo = {0.0, 0.9, 0.0}});
+
+    Color via_mode = shade(Ray{Vec3{0.0, 0.0, 5.0}, Vec3{0.0, 0.0, -1.0}}, scene, whitted);
+    Color via_trace = trace_ray(scene, Ray{Vec3{0.0, 0.0, 5.0}, Vec3{0.0, 0.0, -1.0}}, 0.0, T_INFINITE, 3);
+    CHECK_NEAR(via_mode.r, via_trace.r, 0.0);
+    CHECK_NEAR(via_mode.g, via_trace.g, 0.0);
+    CHECK_NEAR(via_mode.b, via_trace.b, 0.0);
+
+    RenderSettings no_bounce;
+    no_bounce.mode = ShadingMode::whitted;
+    no_bounce.max_depth = 0;
+    Color flat = shade(Ray{Vec3{0.0, 0.0, 5.0}, Vec3{0.0, 0.0, -1.0}}, scene, no_bounce);
+    CHECK_NEAR(flat.r, 0.1, 1e-12);
+    CHECK_NEAR(flat.g, 0.1, 1e-12);
+    CHECK_NEAR(flat.b, 0.1, 1e-12);
+
+    Color sky = shade(Ray{Vec3{0.0, 0.0, 5.0}, Vec3{0.0, 0.0, 1.0}}, scene, whitted);
+    expect_color(sky, 0.5, 0.7, 1.0, 1e-12);
+}
+
 int main() {
     test_ambient_only();
     test_directional_cosine();
@@ -461,5 +821,19 @@ int main() {
     test_phong_restriction_not_redundant_with_cosine();
     test_phong_point_light_direction_recomputed();
     test_phong_mode();
+    test_shadow_blocks_diffuse_and_specular();
+    test_point_light_beyond_occluder_is_still_shadowed();
+    test_point_light_does_not_shadow_past_itself();
+    test_shadow_footprint_matches_analytic_geometry();
+    test_shadow_acne_disappears_with_epsilon();
+    test_shadows_do_not_change_unoccluded_results();
+    test_mirror_direction_closed_form();
+    test_trace_ray_terminates_at_zero_depth_or_zero_reflectivity();
+    test_trace_ray_matches_the_recursive_formula_exactly();
+    test_two_facing_mirrors_terminate();
+    test_truncation_error_decays_geometrically();
+    test_saturate_clamps_overexposed_colors();
+    test_reflection_shows_the_other_object();
+    test_whitted_mode();
     return check::report("lighting");
 }

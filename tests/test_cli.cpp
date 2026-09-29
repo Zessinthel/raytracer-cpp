@@ -45,22 +45,25 @@ static void test_defaults() {
     CHECK_NEAR(o.fov_degrees, 40.0, 0.0);
     CHECK(o.settings.mode == ShadingMode::normals);
     CHECK_NEAR(o.settings.distance_far, 20.0, 0.0);
+    CHECK(o.settings.max_depth == 3);
     CHECK(!o.help);
 }
 
 static void test_flags() {
     cli::Options o = parse({"--width", "1024", "--height", "512", "--fov", "55.5",
-                            "--mode", "distance", "--far", "12.5", "--output", "out.png"});
+                            "--mode", "distance", "--far", "12.5", "--depth", "5", "--output", "out.png"});
     CHECK(o.width == 1024 && o.height == 512);
     CHECK_NEAR(o.fov_degrees, 55.5, 0.0);
     CHECK(o.settings.mode == ShadingMode::distance);
     CHECK_NEAR(o.settings.distance_far, 12.5, 0.0);
+    CHECK(o.settings.max_depth == 5);
     CHECK(is_single(o.outputs, "out.png", cli::OutputFormat::png));
 
     CHECK(parse({"--mode", "object-id"}).settings.mode == ShadingMode::object_id);
     CHECK(parse({"--mode", "albedo"}).settings.mode == ShadingMode::albedo);
     CHECK(parse({"--mode", "lambert"}).settings.mode == ShadingMode::lambert);
     CHECK(parse({"--mode", "phong"}).settings.mode == ShadingMode::phong);
+    CHECK(parse({"--mode", "whitted"}).settings.mode == ShadingMode::whitted);
     CHECK(parse({"--mode", "normals"}).settings.mode == ShadingMode::normals);
     CHECK(parse({"--help"}).help);
     CHECK(parse({"--help", "--width", "10"}).help);
@@ -117,6 +120,11 @@ static void test_rejections() {
     CHECK(rejects({"--far", "0"}));
     CHECK(rejects({"--far", "-1"}));
     CHECK(rejects({"--far", "1e999"}));
+    CHECK(rejects({"--depth", "-1"}));
+    CHECK(rejects({"--depth", "33"}));
+    CHECK(!rejects({"--depth", "0"}));
+    CHECK(!rejects({"--depth", "32"}));
+    CHECK(rejects({"--depth", "3.5"}));
     CHECK(rejects({"--mode", "fancy"}));
     CHECK(rejects({"--mode", "Normals"}));            // names are case-sensitive
     CHECK(rejects({"--mode"}));
@@ -137,6 +145,8 @@ static void test_usage() {
     CHECK(text.find("albedo") != std::string::npos);
     CHECK(text.find("lambert") != std::string::npos);
     CHECK(text.find("phong") != std::string::npos);
+    CHECK(text.find("whitted") != std::string::npos);
+    CHECK(text.find("--depth") != std::string::npos);
     CHECK(text.find("both") != std::string::npos);     // the no-extension rule is documented
 }
 

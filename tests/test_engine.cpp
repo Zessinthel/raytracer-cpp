@@ -3,6 +3,7 @@
 // Checks for the pure-math layer: vectors, matrices, coordinate conversions,
 // grid generation and mesh connectivity. Links against `engine` only.
 #include <array>
+#include <cmath>
 #include <numbers>
 #include <stdexcept>
 #include <utility>
@@ -10,6 +11,7 @@
 #include "check.hpp"
 #include "raytracer/engine/coordinates.hpp"
 #include "raytracer/engine/discretizer.hpp"
+#include "raytracer/engine/color.hpp"
 #include "raytracer/engine/image.hpp"
 #include "raytracer/engine/mat3.hpp"
 #include "raytracer/engine/topology.hpp"
@@ -176,6 +178,39 @@ static void test_image() {
     CHECK(rejected == 3);
 }
 
+static void test_color() {
+    using raytracer::engine::Color;
+    using raytracer::engine::saturate;
+
+    Color a{0.2, 0.5, 0.8};
+    CHECK_NEAR((a * 2.0).r, 0.4, 1e-15);
+    CHECK_NEAR((2.0 * a).b, 1.6, 1e-15);
+    Color b{0.1, 0.1, 0.1};
+    Color sum = a + b;
+    CHECK_NEAR(sum.r, 0.3, 1e-15);
+    CHECK_NEAR(sum.g, 0.6, 1e-15);
+    CHECK_NEAR(sum.b, 0.9, 1e-15);
+
+    // saturate clamps each channel independently, in either direction.
+    Color out_of_range{-0.5, 0.5, 1.5};
+    Color clamped = saturate(out_of_range);
+    CHECK_NEAR(clamped.r, 0.0, 0.0);
+    CHECK_NEAR(clamped.g, 0.5, 0.0);
+    CHECK_NEAR(clamped.b, 1.0, 0.0);
+
+    // A value already inside [0, 1] is left alone.
+    Color inside{0.0, 0.3, 1.0};
+    Color still = saturate(inside);
+    CHECK_NEAR(still.r, 0.0, 0.0);
+    CHECK_NEAR(still.g, 0.3, 0.0);
+    CHECK_NEAR(still.b, 1.0, 0.0);
+
+    // A NaN channel clamps to 0, like io::to_byte: a bug upstream should show
+    // up as black, not propagate as an arbitrary value.
+    Color with_nan{std::nan(""), 0.5, 0.5};
+    CHECK_NEAR(saturate(with_nan).r, 0.0, 0.0);
+}
+
 int main() {
     test_vec3();
     test_mat3();
@@ -183,5 +218,6 @@ int main() {
     test_discretizer();
     test_topology();
     test_image();
+    test_color();
     return check::report("engine");
 }
