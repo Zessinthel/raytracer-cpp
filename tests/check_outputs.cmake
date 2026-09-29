@@ -94,14 +94,45 @@ run_ok(${SMALL} --mode phong --output "${WORK_DIR}/m_phong.ppm")
 file(SHA256 "${WORK_DIR}/m_normals.ppm" h_normals)
 file(SHA256 "${WORK_DIR}/m_distance.ppm" h_distance)
 file(SHA256 "${WORK_DIR}/m_albedo.ppm" h_albedo)
-file(SHA256 "${WORK_DIR}/m_lambert.ppm" h_lambert)
-file(SHA256 "${WORK_DIR}/m_phong.ppm" h_phong)
-set(mode_hashes ${h_normals} ${h_distance} ${h_albedo} ${h_lambert} ${h_phong})
-list(LENGTH mode_hashes mode_count)
-list(REMOVE_DUPLICATES mode_hashes)
-list(LENGTH mode_hashes distinct_count)
-if(NOT mode_count EQUAL distinct_count)
-    message(FATAL_ERROR "two different modes produced the same image")
+
+# normals, distance, albedo and object_id encode the answer in fundamentally
+# different ways (sky+normal color, grayscale by depth, flat material color,
+# a fixed id palette), so they must differ for any scene with at least one
+# hit, regardless of where the lights or the camera happen to sit.
+run_ok(${SMALL} --mode object-id --output "${WORK_DIR}/m_object_id.ppm")
+file(SHA256 "${WORK_DIR}/m_object_id.ppm" h_object_id)
+set(structural_hashes ${h_normals} ${h_distance} ${h_albedo} ${h_object_id})
+list(LENGTH structural_hashes structural_count)
+list(REMOVE_DUPLICATES structural_hashes)
+list(LENGTH structural_hashes structural_distinct)
+if(NOT structural_count EQUAL structural_distinct)
+    message(FATAL_ERROR "two structurally different modes (normals/distance/albedo/object-id) produced the same image")
+endif()
+
+# lambert vs phong is different: phong = lambert + a specular term that is
+# never negative, so the only guarantee that holds for ANY scene and ANY
+# resolution is phong's total brightness >= lambert's, with equality when no
+# sampled ray happens to catch a highlight (plausible at this small size).
+file(STRINGS "${WORK_DIR}/m_lambert.ppm" lambert_lines)
+file(STRINGS "${WORK_DIR}/m_phong.ppm" phong_lines)
+set(lambert_sum 0)
+set(phong_sum 0)
+list(LENGTH lambert_lines n_lines)
+math(EXPR last_line "${n_lines} - 1")
+foreach(k RANGE 3 ${last_line})
+    list(GET lambert_lines ${k} lrow)
+    list(GET phong_lines ${k} prow)
+    string(REGEX MATCHALL "[0-9]+" lvals "${lrow}")
+    string(REGEX MATCHALL "[0-9]+" pvals "${prow}")
+    foreach(v IN LISTS lvals)
+        math(EXPR lambert_sum "${lambert_sum} + ${v}")
+    endforeach()
+    foreach(v IN LISTS pvals)
+        math(EXPR phong_sum "${phong_sum} + ${v}")
+    endforeach()
+endforeach()
+if(phong_sum LESS lambert_sum)
+    message(FATAL_ERROR "phong (${phong_sum}) is darker than lambert (${lambert_sum}): the specular term must never subtract light")
 endif()
 run_ok(--width 30 --height 12 --output "${WORK_DIR}/size.ppm")
 expect_ppm("${WORK_DIR}/size.ppm" 30 12)
