@@ -137,6 +137,24 @@ static void test_rejections() {
     }
 }
 
+static void test_custom_default_output_stem() {
+    // A second executable (flower_scene) passes its own default stem so that
+    // omitting --output does not silently fall back to "gallery".
+    cli::Options o = cli::parse_options({}, "flower");
+    CHECK(is_pair(o.outputs, "flower"));
+
+    // --output still overrides it, exactly as with the default "gallery" stem.
+    cli::Options overridden = cli::parse_options({"--output", "custom.png"}, "flower");
+    CHECK(is_single(overridden.outputs, "custom.png", cli::OutputFormat::png));
+
+    // usage() reflects the custom program name and default in its text.
+    std::string text = cli::usage("flower_scene", "flower");
+    CHECK(text.find("flower_scene") != std::string::npos);
+    CHECK(text.find("default flower") != std::string::npos);
+    // The default (no-argument) call is unchanged, for main's own usage().
+    CHECK(cli::usage().find("raytracer") != std::string::npos);
+}
+
 static void test_usage() {
     std::string text = cli::usage();
     for (const char* flag : {"--output", "--width", "--height", "--fov", "--mode", "--far", "--help"})
@@ -156,5 +174,6 @@ int main() {
     test_outputs();
     test_rejections();
     test_usage();
+    test_custom_default_output_stem();
     return check::report("cli");
 }

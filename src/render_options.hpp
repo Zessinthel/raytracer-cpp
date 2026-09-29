@@ -65,12 +65,18 @@ namespace cli {
         bool help = false;
     };
 
-    /** @return the help text listing every option and its default. */
-    inline std::string usage() {
+    /**
+     * @param program_name shown in the usage line (default "raytracer").
+     * @param default_output_stem shown as --output's default (must match
+     *        whatever default_output_stem the caller passes to parse_options).
+     * @return the help text listing every option and its default.
+     */
+    inline std::string usage(const std::string& program_name = "raytracer",
+                             const std::string& default_output_stem = "gallery") {
         return
-            "usage: raytracer [options]\n"
+            "usage: " + program_name + " [options]\n"
             "  --output PATH   .ppm or .png writes only that format; a path with no extension\n"
-            "                  writes both PATH.ppm and PATH.png (default gallery)\n"
+            "                  writes both PATH.ppm and PATH.png (default " + default_output_stem + ")\n"
             "  --width N       image width in pixels, 1 to 16384 (default 800)\n"
             "  --height N      image height in pixels, 1 to 16384 (default 300)\n"
             "  --fov DEGREES   vertical field of view, between 0 and 180 (default 40)\n"
@@ -127,12 +133,19 @@ namespace cli {
      * Parses the command-line arguments (without the program name).
      * A flag given twice keeps its last value.
      * @param args the arguments, e.g. {"--mode", "distance", "--output", "d"}.
+     * @param default_output_stem the output name used when --output is not
+     *        given (the default "gallery" matches the main executable; a
+     *        second executable for a different scene can pass its own, e.g.
+     *        "flower", so both share this parser without one's default
+     *        leaking into the other).
      * @return the options, defaults filled in for whatever was not given.
      * @throws std::invalid_argument for an unknown flag, a missing or malformed
      *         value, or a value out of range; the message says which.
      */
-    inline Options parse_options(const std::vector<std::string>& args) {
+    inline Options parse_options(const std::vector<std::string>& args,
+                                 const std::string& default_output_stem = "gallery") {
         Options options;
+        options.outputs = detail::outputs_for(default_output_stem);
 
         for (std::size_t k = 0; k < args.size(); ++k) {
             const std::string& flag = args[k];

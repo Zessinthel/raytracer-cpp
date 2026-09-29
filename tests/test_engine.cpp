@@ -12,6 +12,7 @@
 #include "raytracer/engine/coordinates.hpp"
 #include "raytracer/engine/discretizer.hpp"
 #include "raytracer/engine/color.hpp"
+#include "raytracer/engine/flower.hpp"
 #include "raytracer/engine/image.hpp"
 #include "raytracer/engine/mat3.hpp"
 #include "raytracer/engine/topology.hpp"
@@ -211,6 +212,24 @@ static void test_color() {
     CHECK_NEAR(saturate(with_nan).r, 0.0, 0.0);
 }
 
+static void test_floor_mod() {
+    using raytracer::engine::detail::floor_mod;
+    // Unlike std::fmod, floor_mod always returns a value with the sign of
+    // the divisor: for a negative dividend the two disagree completely, not
+    // just at a rounding boundary. flower()'s petal envelope depends on
+    // this: its domain starts at a negative s, and std::fmod there would
+    // distort the petals nearest the center.
+    CHECK_NEAR(floor_mod(-7.2, 2.0 * pi), 5.36637061436, 1e-9);   // numpy.mod(-7.2, 2*pi), verified independently
+    CHECK_NEAR(floor_mod(7.2, 2.0 * pi), 0.916814692820, 1e-9);    // a positive dividend: same magnitude either way
+    CHECK_NEAR(floor_mod(0.0, 2.0 * pi), 0.0, 1e-12);
+    CHECK_NEAR(floor_mod(2.0 * pi, 2.0 * pi), 0.0, 1e-9);         // an exact multiple wraps to 0, not n
+    CHECK_NEAR(floor_mod(-2.0 * pi, 2.0 * pi), 0.0, 1e-9);
+    for (double a : {-100.0, -1.0, 1.0, 100.0}) {
+        double r = floor_mod(a, 2.0 * pi);
+        CHECK(r >= 0.0 && r < 2.0 * pi);   // always in [0, n), whatever the sign of a
+    }
+}
+
 int main() {
     test_vec3();
     test_mat3();
@@ -219,5 +238,6 @@ int main() {
     test_topology();
     test_image();
     test_color();
+    test_floor_mod();
     return check::report("engine");
 }

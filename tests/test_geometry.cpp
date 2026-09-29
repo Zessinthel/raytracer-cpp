@@ -12,13 +12,16 @@
 #include <vector>
 
 #include "check.hpp"
+#include "raytracer/engine/flower.hpp"
 #include "raytracer/engine/mat3.hpp"
 #include "raytracer/engine/parametric_surfaces.hpp"
 #include "raytracer/engine/polyhedra.hpp"
 #include "raytracer/engine/transform.hpp"
 #include "raytracer/engine/vec3.hpp"
+#include "raytracer/physics/mesh.hpp"
 
 using namespace raytracer::engine;
+using raytracer::physics::Mesh;
 constexpr double pi = std::numbers::pi;
 
 // Signed volume by the divergence theorem, V = (1/6) * sum of dot(v0, cross(v1, v2)).
@@ -177,10 +180,88 @@ static void test_transform() {
     CHECK_NEAR(signed_volume(up), signed_volume(star()), 1e-12);
 }
 
+// Edges shared by MORE than two triangles: a real topological defect on any
+// surface, open or closed (a boundary edge, shared by exactly one, is valid
+// for an open surface like flower() and must not be flagged). Reuses the
+// same vertex-welding as non_manifold_edges, since flower() also has a
+// collapsed ring (r=0) with distinct vertex indices at the same position.
+static int overused_edges(const TriangleMesh& mesh) {
+    std::map<std::array<long long, 3>, int> welded;
+    std::vector<int> id;
+    id.reserve(mesh.vertices.size());
+    for (const Vec3& v : mesh.vertices) {
+        std::array<long long, 3> key{std::llround(v.x * 1e9),
+                                     std::llround(v.y * 1e9),
+                                     std::llround(v.z * 1e9)};
+        auto it = welded.find(key);
+        if (it == welded.end())
+            it = welded.emplace(key, static_cast<int>(welded.size())).first;
+        id.push_back(it->second);
+    }
+
+    std::map<std::pair<int, int>, int> uses;
+    for (const auto& tri : mesh.triangles) {
+        int a = id[tri[0]], b = id[tri[1]], c = id[tri[2]];
+        if (a == b || b == c || a == c)
+            continue;
+        ++uses[{std::min(a, b), std::max(a, b)}];
+        ++uses[{std::min(b, c), std::max(b, c)}];
+        ++uses[{std::min(c, a), std::max(c, a)}];
+    }
+
+    int bad = 0;
+    for (const auto& entry : uses)
+        if (entry.second > 2)
+            ++bad;
+    return bad;
+}
+
+static void test_flower() {
+    // A stylized rose: open in both r (0 to 1) and s (-2 to 22*pi, eleven
+    // turns), with a single degenerate ring at r=0 where every vertex
+    // collapses to the origin (checked directly, not just inferred from the
+    // triangle count) -- the same kind of degeneracy as a sphere's pole or a
+    // cone's apex, but only one such ring here, not two.
+    int n_r = 20, n_s = 50;
+    auto raw = flower(n_r, n_s);
+    CHECK(raw.vertices.size() == static_cast<std::size_t>(n_r * n_s));
+    CHECK(raw.triangles.size() == static_cast<std::size_t>(2 * (n_r - 1) * (n_s - 1)));
+
+    for (int j = 0; j < n_s; ++j)
+        CHECK_NEAR(length(raw.vertices[static_cast<std::size_t>(j)]), 0.0, 1e-12);
+
+    Mesh mesh = Mesh::from_triangle_mesh(raw);
+    // Exactly one degenerate triangle per quad touching the r=0 ring.
+    CHECK(raw.triangles.size() - mesh.triangle_count() == static_cast<std::size_t>(n_s - 1));
+
+    // No edge is shared by more than two triangles: a real defect would mean
+    // two unrelated parts of the surface got welded together by accident.
+    CHECK(overused_edges(raw) == 0);
+
+    // r=1 is a genuine, non-degenerate boundary: unlike r=0, its points do
+    // not collapse to a single location for varying s.
+    Vec3 outer_a = raw.vertices[static_cast<std::size_t>((n_r - 1) * n_s)];
+    Vec3 outer_b = raw.vertices[static_cast<std::size_t>((n_r - 1) * n_s + n_s / 2)];
+    CHECK(length(outer_a - outer_b) > 0.05);
+
+    // A concrete point, computed independently by hand from the formula
+    // (theta(s)=2exp(-s/8pi), envelope from floor_mod(3.6s,2pi)/pi, etc.) at
+    // r=0.5, s=0: this is the check the purely structural ones above cannot
+    // give, since topology, vertex/triangle counts and the two boundary
+    // checks are all left unchanged by, for instance, flipping the sign of
+    // Z or swapping X and Y.
+    auto custom = flower(21, 5, -1.0, 1.0);      // r steps of 0.05 (0.5 exact at i=10); s in {-1,-.5,0,.5,1}
+    Vec3 p = custom.vertices[static_cast<std::size_t>(10 * 5 + 2)];   // (r,s) = (0.5, 0.0)
+    CHECK_NEAR(p.x, 0.0, 1e-9);
+    CHECK_NEAR(p.y, 0.230369133283, 1e-9);
+    CHECK_NEAR(p.z, -0.088783621805, 1e-9);
+}
+
 int main() {
     test_closed_primitives();
     test_star();
     test_plane();
     test_transform();
+    test_flower();
     return check::report("geometry");
 }

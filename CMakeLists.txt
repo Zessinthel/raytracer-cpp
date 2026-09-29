@@ -27,6 +27,10 @@ add_executable(raytracer src/main.cpp)
 target_link_libraries(raytracer PRIVATE io shading scene physics engine)
 target_include_directories(raytracer PRIVATE src)
 
+add_executable(flower_scene src/flower_main.cpp)
+target_link_libraries(flower_scene PRIVATE io shading scene physics engine)
+target_include_directories(flower_scene PRIVATE src)
+
 # ---- Tests (run with: ctest --test-dir build --output-on-failure) ----------
 # Each suite links only against the layers it is allowed to use, so a test of
 # a lower layer cannot silently depend on a higher one.
@@ -37,7 +41,7 @@ target_link_libraries(test_engine PRIVATE engine)
 add_test(NAME engine COMMAND test_engine)
 
 add_executable(test_geometry tests/test_geometry.cpp)
-target_link_libraries(test_geometry PRIVATE engine)
+target_link_libraries(test_geometry PRIVATE physics engine)
 add_test(NAME geometry COMMAND test_geometry)
 
 add_executable(test_physics tests/test_physics.cpp)
@@ -78,3 +82,8 @@ add_test(NAME outputs
          COMMAND ${CMAKE_COMMAND} -DEXE=$<TARGET_FILE:raytracer>
                  -DWORK_DIR=${CMAKE_BINARY_DIR}/outputs_test
                  -P ${CMAKE_SOURCE_DIR}/tests/check_outputs.cmake)
+
+add_test(NAME flower_outputs
+         COMMAND ${CMAKE_COMMAND} -DEXE=$<TARGET_FILE:flower_scene>
+                 -DWORK_DIR=${CMAKE_BINARY_DIR}/flower_outputs_test
+                 -P ${CMAKE_SOURCE_DIR}/tests/check_flower_outputs.cmake)
