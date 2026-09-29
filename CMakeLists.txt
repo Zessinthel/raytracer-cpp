@@ -44,6 +44,10 @@ add_executable(test_physics tests/test_physics.cpp)
 target_link_libraries(test_physics PRIVATE physics engine)
 add_test(NAME physics COMMAND test_physics)
 
+add_executable(test_watertightness tests/test_watertightness.cpp)
+target_link_libraries(test_watertightness PRIVATE physics engine)
+add_test(NAME watertightness COMMAND test_watertightness)
+
 add_executable(test_scene_shading tests/test_scene_shading.cpp)
 target_link_libraries(test_scene_shading PRIVATE shading scene physics engine)
 add_test(NAME scene_shading COMMAND test_scene_shading)

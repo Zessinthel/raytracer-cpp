@@ -44,11 +44,10 @@ namespace raytracer::physics {
          * here, and one valid triangle that reaches the collapsed point. The
          * surface therefore stays covered and no vertex is left orphaned.
          *
-         * NOTE: a ray passing exactly through a vertex or an edge shared by
-         * several triangles (for instance a ray along a sphere's axis) may
-         * slip through under floating-point rounding, because the
-         * barycentric tests in intersect_triangle are not watertight. Rays
-         * not aligned with mesh vertices are unaffected.
+         * A ray through a shared vertex or edge is handled correctly:
+         * intersect_triangle's bary_eps tolerance closes the crack that
+         * would otherwise let such a ray slip through with no hit at all
+         * (see its documentation for the audit that measured this).
          *
          * @param source vertex buffer + raw triangle list.
          * @param area_eps minimum accepted triangle area (parallelogram
