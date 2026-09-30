@@ -31,6 +31,22 @@ add_library(shading INTERFACE)
 target_link_libraries(shading INTERFACE engine scene)
 target_include_directories(shading INTERFACE include)
 
+# OpenMP parallelizes the per-pixel loop in shading::render (Step 1 of the
+# multicore plan): each pixel only reads the (const) Scene and writes to its
+# own Image cell, so there is no shared mutable state to protect and the
+# result is bit-for-bit identical to the serial render, just faster. Linked
+# on the shading target itself (an INTERFACE library) so every consumer --
+# raytracer, flower_scene, and any test that calls render() -- picks up the
+# -fopenmp compile flag and the OpenMP runtime automatically, with nothing to
+# change at the call sites. Optional: without OpenMP on the system, the
+# project still configures and builds, just as a serial renderer.
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(shading INTERFACE OpenMP::OpenMP_CXX)
+else()
+    message(WARNING "OpenMP not found: rendering will run single-threaded.")
+endif()
+
 add_library(io INTERFACE)
 target_link_libraries(io INTERFACE engine)
 target_include_directories(io INTERFACE include)
