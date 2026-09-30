@@ -204,6 +204,21 @@ namespace raytracer::shading {
      * the others. The camera indexes pixels with j = 0 at the bottom of the
      * viewport while Image stores row 0 at the top, so the flip happens here,
      * once.
+     *
+     * Parallelized with OpenMP over both loops at once (collapse(2)): every
+     * pixel only reads world (a const Scene) and writes to its own,
+     * distinct image.at(i, j) cell, so there is no shared mutable state
+     * between iterations and the result is bit-for-bit identical to a
+     * serial render, just spread across threads. schedule(dynamic) hands
+     * out pixels a few at a time as each thread finishes its last batch,
+     * rather than splitting the image into one fixed block per thread up
+     * front -- important here because per-pixel cost is wildly uneven in
+     * whitted mode (a ray that misses everything is cheap; one that bounces
+     * through several reflective objects is not), so a fixed split would
+     * leave some threads idle while one still churns through the
+     * expensive region of the image. Builds without OpenMP available still
+     * compile and run this the same way, serially: the pragma is simply
+     * ignored by the compiler.
      * @param camera defines the viewport and the resolution.
      * @param world the scene to render.
      * @param settings which mode to draw and its parameters.
@@ -213,9 +228,15 @@ namespace raytracer::shading {
                                            const raytracer::scene::Scene& world,
                                            const RenderSettings& settings) {
         raytracer::engine::Image image(camera.width(), camera.height());
-        for (int j = 0; j < camera.height(); ++j)
-            for (int i = 0; i < camera.width(); ++i)
-                image.at(i, camera.height() - 1 - j) = shade(camera.ray_for_pixel(i, j), world, settings);
+        const int width = camera.width();
+        const int height = camera.height();
+
+        #pragma omp parallel for collapse(2) schedule(dynamic)
+        for (int j = 0; j < height; ++j) {
+            for (int i = 0; i < width; ++i) {
+                image.at(i, height - 1 - j) = shade(camera.ray_for_pixel(i, j), world, settings);
+            }
+        }
         return image;
     }
 
