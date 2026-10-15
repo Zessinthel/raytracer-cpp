@@ -36,7 +36,11 @@ namespace raytracer::engine {
      * @return a new Vec3 in Cartesian coordinates.
      */
     inline Vec3 cylindrical_to_cartesian(double rho, double phi, double z) {
-        return Vec3{rho * std::cos(phi), rho * std::sin(phi), z};
+        return Vec3{
+            rho * std::cos(phi), 
+            rho * std::sin(phi), 
+            z
+        };
     }
 
 }  // namespace raytracer::engine
