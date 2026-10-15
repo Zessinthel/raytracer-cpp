@@ -92,6 +92,10 @@ add_executable(test_lighting tests/test_lighting.cpp)
 target_link_libraries(test_lighting PRIVATE shading scene physics engine)
 add_test(NAME lighting COMMAND test_lighting)
 
+add_executable(test_parallel tests/test_parallel.cpp)
+target_link_libraries(test_parallel PRIVATE shading scene physics engine)
+add_test(NAME parallel COMMAND test_parallel)
+
 add_executable(test_io tests/test_io.cpp)
 target_link_libraries(test_io PRIVATE io engine)
 add_test(NAME io COMMAND test_io)
