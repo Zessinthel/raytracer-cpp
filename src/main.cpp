@@ -57,10 +57,10 @@ int main(int argc, char** argv) {
         gallery.add(Mesh::from_triangle_mesh(mesh), material);
     };
 
-    add(translated(raytracer::engine::sphere(50, 50, 1.0),        Vec3{-3.5, 0.0, -2.0}), Material{.albedo = {0.85, 0.20, 0.20}, .specular_exponent = 500.0, .reflectivity = 0.2});
-    add(translated(raytracer::engine::torus(50, 50, 1.0, 0.3),    Vec3{-3.5, 0.0,  2.0}), Material{.albedo = {0.20, 0.45, 0.85}, .reflectivity = 0.3});
+    add(translated(raytracer::engine::sphere(150, 150, 1.0),        Vec3{-3.5, 0.0, -2.0}), Material{.albedo = {0.85, 0.20, 0.20}, .specular_exponent = 500.0, .reflectivity = 0.2});
+    add(translated(raytracer::engine::torus(150, 150, 1.0, 0.3),    Vec3{-3.5, 0.0,  2.0}), Material{.albedo = {0.20, 0.45, 0.85}, .reflectivity = 0.3});
     
-    add(translated(raytracer::engine::cylinder(50, 50, 0.8, 2.0), Vec3{ 0.0, 0.0, -2.0}), Material{.albedo = {0.25, 0.70, 0.30}, .specular_exponent = 500.0});
+    add(translated(raytracer::engine::cylinder(150, 150, 0.8, 2.0), Vec3{ 0.0, 0.0, -2.0}), Material{.albedo = {0.25, 0.70, 0.30}, .specular_exponent = 500.0});
     add(translated(raytracer::engine::tetrahedron(1.1),           Vec3{ 0.0, 0.0,  2.0}), Material{.albedo = {0.65, 0.30, 0.70}, .reflectivity = 0.9});
 
     add(translated(raytracer::engine::cube(1.6),                  Vec3{ 3.5, 0.0, -2.0}), Material{.albedo = {0.95, 0.55, 0.15}, .reflectivity = 0.5});  
